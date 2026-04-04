@@ -238,6 +238,54 @@ static void test5()
 }
 
 
+// ── Test 6: FHWindow<2,3> exact knot interpolation on parabola ────────────
+//
+// FHWindow<2,3> (Floater-Hormann D=3) must interpolate exactly at all 5
+// knots for any input.  Also verify that FHWindow<2,4> gives the same
+// result as LagrangeWindow<2> (D=4 is a special case of FH = Lagrange).
+
+static void test6()
+{
+    std::printf("\n-- T6: FHWindow barycentric rational fallback --\n");
+    using V2 = fc::VecN<2>;
+
+    // Parabola: p(t) = (t, t^2)
+    auto par = [](double t) -> V2 { return V2{t, t*t}; };
+    double ts[5] = {1.0, 2.0, 3.0, 4.0, 5.0};
+    V2 pts[5];
+    for (int k = 0; k < 5; ++k) pts[k] = par(ts[k]);
+
+    // T6a: FHWindow<2,3> interpolates exactly at all 5 knots
+    fc::FHWindow<2,3> fh3(pts[0],pts[1],pts[2],pts[3],pts[4],
+                           ts[0],ts[1],ts[2],ts[3],ts[4]);
+    double max_err3 = 0.0;
+    for (int k = 0; k < 5; ++k)
+        max_err3 = std::max(max_err3, (fh3(ts[k]) - pts[k]).norm());
+    char buf[64]; std::snprintf(buf, sizeof(buf), "(max_err=%.2e)", max_err3);
+    check(max_err3 < 1e-12, "T6a: FHWindow<2,3> knots exact", buf);
+
+    // T6b: FHWindow<2,4> matches LagrangeWindow<2> on 100 sample points
+    fc::FHWindow<2,4>     fh4(pts[0],pts[1],pts[2],pts[3],pts[4],
+                               ts[0],ts[1],ts[2],ts[3],ts[4]);
+    fc::LagrangeWindow<2> lag(pts[0],pts[1],pts[2],pts[3],pts[4],
+                               ts[0],ts[1],ts[2],ts[3],ts[4]);
+    double max_diff = 0.0;
+    for (int k = 0; k <= 100; ++k) {
+        double t = ts[0] + k * (ts[4]-ts[0]) / 100.0;
+        max_diff = std::max(max_diff, (fh4(t) - lag(t)).norm());
+    }
+    char buf2[64]; std::snprintf(buf2, sizeof(buf2), "(max_diff=%.2e)", max_diff);
+    check(max_diff < 1e-12, "T6b: FHWindow<2,4> == LagrangeWindow<2>", buf2);
+
+    // T6c: blend_curve<2, FHWindow3> runs without errors (smoke test)
+    std::vector<V2>     ctrl6(8);
+    std::vector<double> times6(8);
+    for (int k = 0; k < 8; ++k) { times6[k] = k; ctrl6[k] = par(k); }
+    auto r = fc::blend_curve<2, fc::FHWindow3>(ctrl6, times6, fc::conic_tag{}, 10, 2);
+    check(!r.pts.empty(), "T6c: blend_curve<2,FHWindow3> produces output");
+}
+
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 int main()
@@ -249,6 +297,7 @@ int main()
     test3();
     test4();
     test5();
+    test6();
 
     std::printf("\n%d/%d passed\n", n_pass, n_pass + n_fail);
     return (n_fail == 0) ? 0 : 1;

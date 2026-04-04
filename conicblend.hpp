@@ -962,6 +962,77 @@ struct LagrangeWindow {
     }
 };
 
+// ── FHWindow: Floater-Hormann barycentric rational fallback ──────────────────
+//
+// Barycentric rational interpolant (Floater & Hormann 2007) through 5 pts.
+// Weights w̃ₖ depend only on node times tₖ — not on coordinate values — so
+// the formula p(t) = Σₖ [w̃ₖ/(t−tₖ)]·pₖ / Σₖ [w̃ₖ/(t−tₖ)] is rotationally
+// invariant (same scalar weights applied to every coordinate of every pₖ).
+//
+// Template parameter D (blending parameter, 0 ≤ D ≤ 4 for 5 control points):
+//   D=4 → reduces exactly to LagrangeWindow (degree-4 polynomial)
+//   D=3 → blends 2 cubics, O(h^5) accuracy, no poles  ← default
+//   D=2 → blends 3 quadratics, O(h^4)
+//   D=1 → blends 4 linears,    O(h^3)
+//
+// Guaranteed no real poles (FH theorem). Always valid(). Evaluation O(5·Dim).
+
+template <int Dim, int D = 3>
+struct FHWindow {
+    static_assert(D >= 0 && D <= 4,
+                  "FHWindow: D must be in [0,4] for 5 control points");
+    double    ws_[5]{};
+    double    ts_[5]{};
+    VecN<Dim> pts_[5]{};
+
+    FHWindow() = default;
+
+    FHWindow(VecN<Dim> const& p0, VecN<Dim> const& p1,
+             VecN<Dim> const& p2, VecN<Dim> const& p3,
+             VecN<Dim> const& p4,
+             double t0, double t1, double t2, double t3, double t4)
+    {
+        pts_[0]=p0; pts_[1]=p1; pts_[2]=p2; pts_[3]=p3; pts_[4]=p4;
+        ts_[0]=t0;  ts_[1]=t1;  ts_[2]=t2;  ts_[3]=t3;  ts_[4]=t4;
+
+        // Compute FH barycentric weights (Floater-Hormann 2007, eq. 8):
+        //   w̃ₖ = Σⱼ (-1)^j  Πᵢ∈[j,j+D], i≠k  1/(tₖ−tᵢ)
+        // where j ranges over max(0,k−D)..min(4−D,k).
+        for (int k = 0; k < 5; ++k) {
+            double w   = 0.0;
+            int    j_lo = (k > D)     ? k - D   : 0;
+            int    j_hi = (4 - D < k) ? 4 - D   : k;
+            for (int j = j_lo; j <= j_hi; ++j) {
+                double prod = (j % 2 == 0) ? 1.0 : -1.0;
+                for (int i = j; i <= j + D; ++i)
+                    if (i != k) prod /= (ts_[k] - ts_[i]);
+                w += prod;
+            }
+            ws_[k] = w;
+        }
+    }
+
+    bool valid()        const { return true; }
+    bool uses_c_infty() const { return true; }
+
+    VecN<Dim> operator()(double t) const {
+        // Exact knot: barycentric formula is 0/0 there, return stored point.
+        for (int k = 0; k < 5; ++k)
+            if (t == ts_[k]) return pts_[k];
+        VecN<Dim> num{};
+        double    den = 0.0;
+        for (int k = 0; k < 5; ++k) {
+            double lam  = ws_[k] / (t - ts_[k]);
+            num = num + pts_[k] * lam;
+            den += lam;
+        }
+        return num * (1.0 / den);
+    }
+};
+
+// Convenient alias: D=3 matches Lagrange's O(h^5) accuracy order, no poles.
+template <int Dim> using FHWindow3 = FHWindow<Dim, 3>;
+
 // ── Tagged overload: blend_curve(..., conic_tag{}) ─────────────────────────
 //
 // Builds ConicWindow objects for each group of 5 consecutive control points.
@@ -976,7 +1047,7 @@ struct LagrangeWindow {
 // used_conic (optional out-parameter): true if at least one conic window was
 // used, false if all windows fell back to Lagrange.  Pass nullptr to ignore.
 
-template <int Dim>
+template <int Dim, template<int> class Fallback = LagrangeWindow>
 inline BlendResultND<Dim> blend_curve(
 #if __cplusplus >= 202002L
     std::span<VecN<Dim> const> ctrl,
@@ -1001,7 +1072,7 @@ inline BlendResultND<Dim> blend_curve(
 
     // Build (n-4) windows: ConicWindow where valid, LagrangeWindow otherwise.
     // Per-window fallback: invalidity is local — no global effect on other windows.
-    using Win = std::variant<ConicWindow<Dim>, LagrangeWindow<Dim>>;
+    using Win = std::variant<ConicWindow<Dim>, Fallback<Dim>>;
     std::vector<Win> wins;
     wins.reserve(n - 4);
     int n_conic = 0;
@@ -1014,7 +1085,7 @@ inline BlendResultND<Dim> blend_curve(
             ++n_conic;
             wins.emplace_back(std::move(cw));
         } else {
-            wins.emplace_back(LagrangeWindow<Dim>(
+            wins.emplace_back(Fallback<Dim>(
                 ctrl[i], ctrl[i+1], ctrl[i+2], ctrl[i+3], ctrl[i+4],
                 times[i], times[i+1], times[i+2], times[i+3], times[i+4]));
         }

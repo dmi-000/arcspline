@@ -1355,7 +1355,7 @@ public:
 //   Clifford-torus path (not CylinderWindow or ConicWindow fallback).
 //   For N=2/3, set the same way as the underlying used_conic/used_cylinder.
 
-template <int N>
+template <int N, template<int> class Fallback = LagrangeWindow>
 inline BlendResultND<N> blend_curve(
 #if __cplusplus >= 202002L
     std::span<VecN<N> const> ctrl,
@@ -1370,11 +1370,11 @@ inline BlendResultND<N> blend_curve(
     bool* used_clifford = nullptr)
 {
     if constexpr (N == 2) {
-        return blend_curve<2>(ctrl, times, conic_tag{},
-                              pts_per_seg, smooth_N, used_clifford);
+        return blend_curve<2, Fallback>(ctrl, times, conic_tag{},
+                                        pts_per_seg, smooth_N, used_clifford);
     } else if constexpr (N == 3) {
-        return blend_curve<3>(ctrl, times, cylinder_tag{},
-                              pts_per_seg, smooth_N, used_clifford);
+        return blend_curve<3, Fallback>(ctrl, times, cylinder_tag{},
+                                        pts_per_seg, smooth_N, used_clifford);
     } else {
         static_assert(N >= 4);
 
@@ -1386,7 +1386,7 @@ inline BlendResultND<N> blend_curve(
         if (pts_per_seg < 2)
             FC_THROW("fc::blend_curve(nd): pts_per_seg must be >= 2");
 
-        using Win = std::variant<CliffordWindow<N>, LagrangeWindow<N>>;
+        using Win = std::variant<CliffordWindow<N>, Fallback<N>>;
         std::vector<Win> wins;
         wins.reserve(n - 4);
         int n_clifford = 0;
@@ -1398,7 +1398,7 @@ inline BlendResultND<N> blend_curve(
                 if (cw.used_clifford()) ++n_clifford;
                 wins.emplace_back(std::move(cw));
             } else {
-                wins.emplace_back(LagrangeWindow<N>(
+                wins.emplace_back(Fallback<N>(
                     ctrl[i],ctrl[i+1],ctrl[i+2],ctrl[i+3],ctrl[i+4],
                     times[i],times[i+1],times[i+2],times[i+3],times[i+4]));
             }

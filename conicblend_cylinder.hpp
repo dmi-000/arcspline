@@ -634,7 +634,7 @@ public:
 //
 // used_cylinder (optional): set to true if at least one cylinder window was used.
 
-template <int Dim>
+template <int Dim, template<int> class Fallback = LagrangeWindow>
 inline BlendResultND<Dim> blend_curve(
 #if __cplusplus >= 202002L
     std::span<VecN<Dim> const> ctrl,
@@ -658,7 +658,7 @@ inline BlendResultND<Dim> blend_curve(
     if (pts_per_seg < 2)
         FC_THROW("fc::blend_curve(cylinder): pts_per_seg must be >= 2");
 
-    using Win = std::variant<CylinderWindow<3>, LagrangeWindow<3>>;
+    using Win = std::variant<CylinderWindow<3>, Fallback<3>>;
     std::vector<Win> wins;
     wins.reserve(n-4);
     int n_cyl = 0;
@@ -670,7 +670,7 @@ inline BlendResultND<Dim> blend_curve(
             if (cw.used_cylinder()) ++n_cyl;
             wins.emplace_back(std::move(cw));
         } else {
-            wins.emplace_back(LagrangeWindow<3>(
+            wins.emplace_back(Fallback<3>(
                 ctrl[i],ctrl[i+1],ctrl[i+2],ctrl[i+3],ctrl[i+4],
                 times[i],times[i+1],times[i+2],times[i+3],times[i+4]));
         }
