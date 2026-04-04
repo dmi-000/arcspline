@@ -368,6 +368,88 @@ auto r = fc::blend_curve(ctrl, times, fc::cylinder_tag{});
 | Planar or near-planar curve | `conic_tag` | No cylinder solve needed; both give similar accuracy |
 | Unknown | `cylinder_tag` | Never observed to be worse than conic on test curves |
 
+---
+
+### N-dimensional generalisation (`conicblend_nd.hpp`)
+
+Includes `conicblend_cylinder.hpp` (and therefore `conicblend.hpp`).  Provides
+a unified `nd_tag{}` dispatch and `CliffordWindow<N>` for N ≥ 4.
+
+#### `nd_tag` dispatch
+
+```cpp
+#include "conicblend_nd.hpp"
+
+auto r = fc::blend_curve<N>(ctrl, times, fc::nd_tag{}, pts_per_seg, smooth_N);
+```
+
+Routes automatically by dimension:
+
+| N | Window used | Exact for |
+|---|---|---|
+| 2 | `ConicWindow<2>` via `conic_tag` | All planar conics |
+| 3 | `CylinderWindow<3>` via `cylinder_tag` | Helices, geodesics on cylinders |
+| ≥ 4 | `CliffordWindow<N>` | Torus helices in ℝᴺ |
+
+#### `CliffordWindow<N>` — 3-level fallback
+
+Fits 5 points in ℝᴺ to a Clifford torus S¹(r₁)×S¹(r₂).  Tries each level in order:
+
+1. **Clifford torus** (hull rank = 4): project 5 pts to 4D affine hull via
+   Gram-Schmidt; fit S¹×S¹ via sphere fit → moment-matrix eigendecomposition →
+   ESPRIT propagator → GJ direct formula in ambient ℝᴺ (bypasses lift() to
+   achieve machine-precision knot interpolation for all dt).
+2. **CylinderWindow<3>** (hull rank = 3): 3D sub-hull, same as `cylinder_tag`.
+3. **ConicWindow<2>** (hull rank = 2): 2D sub-hull, same as `conic_tag`.
+4. **Fallback<N>** (all levels fail): `LagrangeWindow<N>` by default; can be
+   overridden with the `Fallback` template parameter (see below).
+
+`CliffordWindow<N>` reports which level it used via `used_clifford()`,
+`used_cylinder()`, `used_planar()`, and `hull_rank()`.
+
+#### `blend_curve<N, Fallback>` — Fallback template parameter
+
+All three `blend_curve` overloads (`conic_tag`, `cylinder_tag`, `nd_tag`) accept
+a second template parameter specifying the fallback window type:
+
+```cpp
+template <int N, template<int> class Fallback = LagrangeWindow>
+BlendResultND<N> blend_curve(ctrl, times, nd_tag{}, ...);
+
+// Use FH rational fallback:
+fc::blend_curve<4, fc::FHWindow3>(ctrl, times, fc::nd_tag{}, 120, 2);
+```
+
+The `Fallback<N>` type must satisfy the same interface as `LagrangeWindow`:
+5-point constructor + `valid()` + `operator()(double t) -> VecN<N>`.
+
+#### `FHWindow<Dim, D>` — Floater-Hormann barycentric rational
+
+```cpp
+// In conicblend.hpp (available to all tags):
+template <int Dim, int D = 3> struct FHWindow;
+template <int Dim> using FHWindow3 = FHWindow<Dim, 3>;
+```
+
+Barycentric rational interpolant (Floater & Hormann, 2007).  Weights `w̃ₖ` are
+computed from node times only, making the formula:
+
+```
+p(t) = Σₖ [w̃ₖ/(t−tₖ)] · pₖ  /  Σₖ [w̃ₖ/(t−tₖ)]
+```
+
+a scalar-weighted combination of the input point vectors — rotationally invariant
+(unlike per-coordinate rationals, whose denominators depend on coordinate values).
+
+| D | Interpolants blended | Accuracy | Notes |
+|---|---|---|---|
+| 4 | 1 degree-4 polynomial | O(h⁵) | Identical to `LagrangeWindow` |
+| 3 | 2 cubics | O(h⁵) | Default — same order as Lagrange, no poles |
+| 2 | 3 quadratics | O(h⁴) | |
+| 1 | 4 linears | O(h³) | |
+
+Guaranteed no real poles by the FH theorem.  Always `valid()`.
+
 #### Embedded / no-exceptions builds
 
 Define `FC_NO_EXCEPTIONS` before including either header to replace all
@@ -619,19 +701,19 @@ gives O(h²) convergence once the angular steps are small.
 
 ## Comparison with conicspline
 
-| Property | conicspline (2D) | conicblend circle | conicblend conic | conicblend cylinder |
-|---|---|---|---|---|
-| Window size | 5 points | 3 points | 5 points | 5 points |
-| Window type | Conic arc | Circle arc | Conic arc | Cylinder geodesic |
-| Fitting | SVD null-space (5×6) | Cramer's rule (2×2) | SVD null-space (5×6) + best-fit plane | 2D Newton on 3×3 minors (Lichtblau) |
-| Orbit parameter | phi = 2·arctan(s) | angle via atan2 | cross-ratio r_i = q_i/(q_i+1) | Lagrange in (r·φ, z) re-rolled |
-| Invariance | similarity | similarity | **affine** (exact); projective (~8e-9 at 10%) | Euclidean (axis is metric) |
-| Fallback | Natural cubic spline | exception (C++) | circle windows | best-fit cylinder → Lagrange |
-| Torsion | N/A (2D) | Implicit via tilting planes | O(κτh³) leakage from plane projection | Captured: cylinder encodes κ and τ |
-| Exact reproduction | Conics | Circles and circular arcs | Conics | Geodesics on cylinders (helices, circles, lines) |
-| Ambient dimension | 2D only | nD (any Dim ≥ 2) | nD (any Dim ≥ 2) | 3D only |
-| Minimum n | 6 | 4 | 6 | 6 |
-| Language | Python | C++17 header-only | C++17 header-only | C++17 header-only |
+| Property | conicspline (2D) | conicblend circle | conicblend conic | conicblend cylinder | conicblend nd |
+|---|---|---|---|---|---|
+| Window size | 5 points | 3 points | 5 points | 5 points | 5 points |
+| Window type | Conic arc | Circle arc | Conic arc | Cylinder geodesic | Clifford torus S¹×S¹ |
+| Fitting | SVD null-space (5×6) | Cramer's rule (2×2) | SVD null-space (5×6) + best-fit plane | 2D Newton on 3×3 minors (Lichtblau) | Sphere fit + moment matrix + ESPRIT + GJ |
+| Orbit parameter | phi = 2·arctan(s) | angle via atan2 | cross-ratio r_i = q_i/(q_i+1) | Lagrange in (r·φ, z) re-rolled | (ω₁t, ω₂t) torus angles via GJ ambient solve |
+| Invariance | similarity | similarity | **affine** (exact); projective (~8e-9 at 10%) | Euclidean (axis is metric) | Euclidean |
+| Fallback | Natural cubic spline | exception (C++) | circle windows | best-fit cyl → planar conic → Lagrange | Clifford → cylinder → conic → Lagrange |
+| Torsion | N/A (2D) | Implicit via tilting planes | O(κτh³) leakage from plane projection | Captured: cylinder encodes κ and τ | Captured in torus angle frequencies |
+| Exact reproduction | Conics | Circles and circular arcs | Conics | Geodesics on cylinders | Torus helices p(t)=(r₁cos ω₁t, r₁sin ω₁t, r₂cos ω₂t, r₂sin ω₂t) |
+| Ambient dimension | 2D only | nD (any Dim ≥ 2) | nD (any Dim ≥ 2) | 3D only | nD (any Dim ≥ 4; dispatches to conic/cylinder for Dim=2/3) |
+| Minimum n | 6 | 4 | 6 | 6 | 6 |
+| Language | Python | C++17 header-only | C++17 header-only | C++17 header-only | C++17 header-only |
 
 ---
 
@@ -639,15 +721,19 @@ gives O(h²) convergence once the angular steps are small.
 
 | File | Role |
 |---|---|
-| `conicblend_circle.hpp` | 3-pt circle windows: namespace `fc`, `template<int Dim>`, `VecN`/`CircleND`/`CircleWindow`/`blend_curve`; 3D aliases; `circle_tag`/`conic_tag` stub; `FC_NO_EXCEPTIONS` |
-| `conicblend.hpp` | 5-pt conic windows: `ConicWindow<Dim>`, cross-ratio orbit, `SymEig<N>` Jacobi SVD, `Pchip5`, `best_fit_plane<Dim>`; `blend_curve(..., conic_tag{})` |
-| `conicblend_cylinder.hpp` | 3D cylinder windows: `CylSol`, `cyl_solve` (2D-Newton Lichtblau), `CylinderWindow<3>`, `blend_curve(..., cylinder_tag{})` |
-| `demo.cpp` | 13 tests (3D circle): helix, torus knot, C^N, collinearity, exact circle, input validation, n=4, large arc, clockwise, tilted circle, non-uniform times, N=1/N=3, tag dispatch |
-| `demo_nd.cpp` | 6 tests (nD circle): Dim=2 circle, Dim=3 helix, Dim=4 torus, collinearity, near-collinear fallback, input validation |
-| `demo_conic.cpp` | 9 tests (5-pt conic): tilted ellipse (~2e-14), parabola (~3.5e-15), 3D helix (~1.3e-15), 4D ellipse (~2.3e-14), input validation, used_conic_flag, C^N continuity, similarity invariance (~2e-14), **affine invariance (~2e-13)** |
-| `demo_cylinder.cpp` | 2 tests (3D cylinder): helix (~2e-15 exact), twisted cubic (53–601× improvement vs conic) |
-| `diag_cylinder2.cpp` | Diagnostic: 2D-Newton cylinder solver survey; all real solutions per window for helix and twisted cubic |
-| `CMakeLists.txt` | CMake build: targets `demo`, `demo_nd`, `demo_conic` |
+| `conicblend_circle.hpp` | 3-pt circle windows: `VecN`/`CircleWindow`/`blend_curve`; 3D aliases; `FC_NO_EXCEPTIONS` |
+| `conicblend.hpp` | 5-pt conic windows: `ConicWindow<Dim>`, `LagrangeWindow<Dim>`, `FHWindow<Dim,D>`, `FHWindow3`; `blend_curve<Dim,Fallback>(..., conic_tag{})` |
+| `conicblend_cylinder.hpp` | 3D cylinder windows: `CylSol`, `cyl_solve` (2D-Newton Lichtblau), `CylinderWindow<3>`; `blend_curve<Dim,Fallback>(..., cylinder_tag{})` |
+| `conicblend_nd.hpp` | N-dim unified header: `CliffordWindow<N>` (Clifford torus → cylinder → conic 3-level fallback); `blend_curve<N,Fallback>(..., nd_tag{})` |
+| `test_clifford_nd.cpp` | 21-test regression suite: T1–T5 (Clifford/cylinder/conic/blend), T6 (FHWindow knot exactness + D=4≡Lagrange) |
+| `test_cylinder_edge.cpp` | 29-test edge-case suite: collinear/line-mode, planar fallback, circle/helix exact, tilted axis, best-fit gate |
+| `diag_clifford.cpp` | 30-case Clifford torus stress test: varied r₁,r₂,ω₁,ω₂, dt, spacing; 27/30 pass (3 unfixable aliasing cases) |
+| `demo.cpp` | 13 tests (3D circle): helix, torus knot, C^N, collinearity, exact circle, input validation |
+| `demo_nd.cpp` | 6 tests (nD circle): Dim=2 circle, Dim=3 helix, Dim=4 torus, collinearity, fallback, validation |
+| `demo_conic.cpp` | 9 tests (5-pt conic): tilted ellipse (~2e-14), parabola, 3D helix, 4D ellipse, **affine invariance (~2e-13)** |
+| `demo_cylinder.cpp` | 2 tests (3D cylinder): helix (~2e-15 exact), twisted cubic (53–601× vs conic) |
+| `diag_cylinder2.cpp` | Diagnostic: 2D-Newton cylinder solver survey for helix and twisted cubic |
+| `CMakeLists.txt` | CMake build |
 | `frenet_blend_proto.py` | Python prototype: position-space and Frenet-space blend comparison |
-| `demo_curves.py` | Six 3D test curves with window-arc visualisation and τ coloring |
-| `plot_blend.py` | Visualisation of helix/torus knot τ: smoothblended, convergence, analytic |
+| `demo_curves.py` | Six 3D test curves with window-arc visualisation and τ coloring (matplotlib) |
+| `plot_blend.py` | Visualisation of helix/torus knot τ: smoothblended, convergence, analytic (matplotlib) |

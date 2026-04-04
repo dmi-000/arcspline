@@ -30,29 +30,36 @@ smoothstep weight, giving exact C^N continuity without solving any global system
 ## Quick start
 
 ```cpp
-#include "conicblend.hpp"   // or conicblend_circle.hpp for 3-point circle windows
+#include "conicblend_nd.hpp"   // all windows; includes conicblend.hpp + cylinder
 #include <vector>
 #include <cmath>
 
 int main()
 {
-    // Sample a helix: P(t) = (cos t, sin t, 0.3 t)
+    // 3D helix: P(t) = (cos t, sin t, 0.3 t)
     int n = 20;
     std::vector<fc::Vec3>   ctrl(n);
     std::vector<double>     times(n);
     for (int i = 0; i < n; ++i) {
-        double t  = 4.0 * M_PI * i / (n - 1);
-        ctrl[i]   = fc::Vec3(std::cos(t), std::sin(t), 0.3 * t);
-        times[i]  = t;
+        double t = 4.0 * M_PI * i / (n - 1);
+        ctrl[i]  = fc::Vec3(std::cos(t), std::sin(t), 0.3 * t);
+        times[i] = t;
     }
 
-    // 3-point circle windows (conicblend_circle.hpp, minimum n=4)
-    auto r_circle = fc::blend_curve(ctrl, times, 80, 2);
+    // 3D: automatic best window (Clifford/cylinder/conic/FH fallback)
+    auto r3 = fc::blend_curve<3>(ctrl, times, fc::nd_tag{}, 80, 2);
 
-    // 5-point conic windows (conicblend.hpp, minimum n=6, affine-invariant)
-    auto r_conic  = fc::blend_curve(ctrl, times, fc::conic_tag{}, 80, 2);
+    // 3D: explicit cylinder windows (best for helices and space curves)
+    auto r_cyl = fc::blend_curve(ctrl, times, fc::cylinder_tag{}, 80, 2);
 
-    // r.pts  — std::vector<Vec3>, dense output points
+    // N-dimensional: works for any Dim >= 2
+    using V4 = fc::VecN<4>;
+    std::vector<V4>     ctrl4(n);
+    std::vector<double> times4(n);
+    // ... fill ctrl4 ...
+    auto r4 = fc::blend_curve<4>(ctrl4, times4, fc::nd_tag{}, 80, 2);
+
+    // r.pts   — std::vector<VecN<Dim>>, dense output points
     // r.times — corresponding parameter values
 }
 ```
@@ -64,48 +71,73 @@ clang++ -std=c++17 -O2 -I. -o my_program my_program.cpp
 
 ---
 
-## Two headers
+## Four headers
 
-| Header | Window | Points | Min n | Exact for | Invariance |
-|---|---|---|---|---|---|
-| `conicblend_circle.hpp` | Circle arc | 3 | 4 | Circles | Similarity |
-| `conicblend.hpp` | Conic arc | 5 | 6 | All conics | **Affine** |
+| Header | Window type | Points | Min n | Exact for | Invariance | Dim |
+|---|---|---|---|---|---|---|
+| `conicblend_circle.hpp` | Circle arc | 3 | 4 | Circles | Similarity | any ≥ 2 |
+| `conicblend.hpp` | Conic arc | 5 | 6 | All conics | **Affine** | any ≥ 2 |
+| `conicblend_cylinder.hpp` | Cylinder geodesic | 5 | 6 | Helices, geodesics | Euclidean | 3 only |
+| `conicblend_nd.hpp` | Clifford torus S¹×S¹ | 5 | 6 | Torus helices | Euclidean | any ≥ 4 |
 
-`conicblend.hpp` automatically includes `conicblend_circle.hpp` and falls back to
-circle windows if any conic window fails.
+Each header includes the ones above it. `conicblend_nd.hpp` is the recommended single include.
 
 ### Tag dispatch
 
 ```cpp
-auto r = fc::blend_curve(ctrl, times);                    // circle (3D, no tag)
-auto r = fc::blend_curve(ctrl, times, fc::circle_tag{}); // circle (explicit)
-auto r = fc::blend_curve(ctrl, times, fc::conic_tag{});  // conic (requires conicblend.hpp)
+#include "conicblend_nd.hpp"
+
+auto r = fc::blend_curve(ctrl, times);                     // circle (3D, no tag)
+auto r = fc::blend_curve(ctrl, times, fc::conic_tag{});    // conic (affine-invariant)
+auto r = fc::blend_curve(ctrl, times, fc::cylinder_tag{}); // cylinder (3D, best for helices)
+auto r = fc::blend_curve<N>(ctrl, times, fc::nd_tag{});    // automatic (N=2→conic, 3→cylinder, ≥4→Clifford)
 ```
 
-### nD template form
+### Fallback template parameter
+
+Every `blend_curve` overload accepts an optional `Fallback` template parameter
+(default: `LagrangeWindow`) for windows where the geometric fit fails:
 
 ```cpp
-auto r = fc::blend_curve<4>(ctrl4d, times, fc::conic_tag{});  // 4D
-auto r = fc::blend_curve<2>(ctrl2d, times);                   // 2D
+// Use Floater-Hormann D=3 rational fallback instead of degree-4 polynomial:
+auto r = fc::blend_curve<4, fc::FHWindow3>(ctrl, times, fc::nd_tag{}, 80, 2);
+
+// Explicit D:
+template<int D> using FH1 = fc::FHWindow<D, 1>;
+auto r = fc::blend_curve<3, FH1>(ctrl, times, fc::cylinder_tag{}, 80, 2);
 ```
+
+`FHWindow<Dim, D>` is a pole-free barycentric rational interpolant (Floater-Hormann
+2007). Unlike per-coordinate rationals, its weights depend only on the node times —
+not coordinate values — making it rotationally invariant. D=4 reduces exactly to
+`LagrangeWindow`; D=3 (default via `FHWindow3`) matches Lagrange's O(h⁵) accuracy.
 
 ---
 
 ## Build and test
 
 ```bash
-# Run tests directly
-clang++ -std=c++17 -O2 -I. -o demo      demo.cpp      && ./demo
-clang++ -std=c++17 -O2 -I. -o demo_nd   demo_nd.cpp   && ./demo_nd
-clang++ -std=c++17 -O2 -I. -o demo_conic demo_conic.cpp && ./demo_conic
+CXX="g++ -std=c++17 -O2 -I."
+
+# Primary regression suites
+$CXX -o test_clifford_nd   test_clifford_nd.cpp   && ./test_clifford_nd    # 21/21
+$CXX -o test_cylinder_edge test_cylinder_edge.cpp && ./test_cylinder_edge  # 29/29
+
+# Clifford torus stress test (30 parametric cases)
+$CXX -o diag_clifford diag_clifford.cpp && ./diag_clifford  # 27/30
+
+# Integration demos
+$CXX -o demo       demo.cpp       && ./demo
+$CXX -o demo_conic demo_conic.cpp && ./demo_conic
+$CXX -o demo_cylinder demo_cylinder.cpp && ./demo_cylinder
 
 # Or via CMake
-cmake -B build && cmake --build build
-ctest --test-dir build
+cmake -B build && cmake --build build && ctest --test-dir build
 ```
 
-Tests cover: exact interpolation, C^N continuity, similarity and affine invariance,
-collinearity guards, near-collinear fallback, nD (Dim=2/3/4), input validation.
+Test coverage: exact interpolation, C^N continuity, similarity/affine invariance,
+collinearity guards, all fallback levels, FHWindow identity (D=4=Lagrange),
+nD (Dim=2…6), Clifford torus helices, cylinder helices and twisted cubics.
 
 ---
 
