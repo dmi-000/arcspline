@@ -969,18 +969,20 @@ struct LagrangeWindow {
 // the formula p(t) = Σₖ [w̃ₖ/(t−tₖ)]·pₖ / Σₖ [w̃ₖ/(t−tₖ)] is rotationally
 // invariant (same scalar weights applied to every coordinate of every pₖ).
 //
-// Template parameter D (blending parameter, 0 ≤ D ≤ 4 for 5 control points):
-//   D=4 → reduces exactly to LagrangeWindow (degree-4 polynomial)
-//   D=3 → blends 2 cubics, O(h^5) accuracy, no poles  ← default
-//   D=2 → blends 3 quadratics, O(h^4)
-//   D=1 → blends 4 linears,    O(h^3)
+// Template parameter Depth (blending depth, 0 ≤ Depth ≤ 4 for 5 control points):
+//   Each local sub-interpolant has polynomial degree Depth; the resulting
+//   rational function has higher degree and is NOT a polynomial of degree Depth.
+//   Depth=4 → reduces exactly to LagrangeWindow (degree-4 polynomial)
+//   Depth=3 → blends 2 cubics, O(h^5) accuracy, no poles  ← default
+//   Depth=2 → blends 3 quadratics, O(h^4)
+//   Depth=1 → blends 4 linears,    O(h^3)
 //
 // Guaranteed no real poles (FH theorem). Always valid(). Evaluation O(5·Dim).
 
-template <int Dim, int D = 3>
+template <int Dim, int Depth = 3>
 struct FHWindow {
-    static_assert(D >= 0 && D <= 4,
-                  "FHWindow: D must be in [0,4] for 5 control points");
+    static_assert(Depth >= 0 && Depth <= 4,
+                  "FHWindow: Depth must be in [0,4] for 5 control points");
     double    ws_[5]{};
     double    ts_[5]{};
     VecN<Dim> pts_[5]{};
@@ -996,15 +998,15 @@ struct FHWindow {
         ts_[0]=t0;  ts_[1]=t1;  ts_[2]=t2;  ts_[3]=t3;  ts_[4]=t4;
 
         // Compute FH barycentric weights (Floater-Hormann 2007, eq. 8):
-        //   w̃ₖ = Σⱼ (-1)^j  Πᵢ∈[j,j+D], i≠k  1/(tₖ−tᵢ)
-        // where j ranges over max(0,k−D)..min(4−D,k).
+        //   w̃ₖ = Σⱼ (-1)^j  Πᵢ∈[j,j+Depth], i≠k  1/(tₖ−tᵢ)
+        // where j ranges over max(0,k−Depth)..min(4−Depth,k).
         for (int k = 0; k < 5; ++k) {
             double w   = 0.0;
-            int    j_lo = (k > D)     ? k - D   : 0;
-            int    j_hi = (4 - D < k) ? 4 - D   : k;
+            int    j_lo = (k > Depth)     ? k - Depth   : 0;
+            int    j_hi = (4 - Depth < k) ? 4 - Depth   : k;
             for (int j = j_lo; j <= j_hi; ++j) {
                 double prod = (j % 2 == 0) ? 1.0 : -1.0;
-                for (int i = j; i <= j + D; ++i)
+                for (int i = j; i <= j + Depth; ++i)
                     if (i != k) prod /= (ts_[k] - ts_[i]);
                 w += prod;
             }
@@ -1030,7 +1032,7 @@ struct FHWindow {
     }
 };
 
-// Convenient alias: D=3 matches Lagrange's O(h^5) accuracy order, no poles.
+// Convenient alias: Depth=3 matches Lagrange's O(h^5) accuracy order, no poles.
 template <int Dim> using FHWindow3 = FHWindow<Dim, 3>;
 
 // ── Tagged overload: blend_curve(..., conic_tag{}) ─────────────────────────

@@ -423,11 +423,11 @@ fc::blend_curve<4, fc::FHWindow3>(ctrl, times, fc::nd_tag{}, 120, 2);
 The `Fallback<N>` type must satisfy the same interface as `LagrangeWindow`:
 5-point constructor + `valid()` + `operator()(double t) -> VecN<N>`.
 
-#### `FHWindow<Dim, D>` — Floater-Hormann barycentric rational
+#### `FHWindow<Dim, Depth>` — Floater-Hormann barycentric rational
 
 ```cpp
 // In conicblend.hpp (available to all tags):
-template <int Dim, int D = 3> struct FHWindow;
+template <int Dim, int Depth = 3> struct FHWindow;
 template <int Dim> using FHWindow3 = FHWindow<Dim, 3>;
 ```
 
@@ -441,7 +441,12 @@ p(t) = Σₖ [w̃ₖ/(t−tₖ)] · pₖ  /  Σₖ [w̃ₖ/(t−tₖ)]
 a scalar-weighted combination of the input point vectors — rotationally invariant
 (unlike per-coordinate rationals, whose denominators depend on coordinate values).
 
-| D | Interpolants blended | Accuracy | Notes |
+`Depth` is the degree of the local polynomial sub-interpolants being blended, **not**
+the degree of the resulting rational function (which has higher degree). This
+distinction is important: `FHWindow<Dim, 3>` blends degree-3 polynomials into a
+rational that is not itself a cubic.
+
+| Depth | Interpolants blended | Accuracy | Notes |
 |---|---|---|---|
 | 4 | 1 degree-4 polynomial | O(h⁵) | Identical to `LagrangeWindow` |
 | 3 | 2 cubics | O(h⁵) | Default — same order as Lagrange, no poles |
@@ -722,10 +727,10 @@ gives O(h²) convergence once the angular steps are small.
 | File | Role |
 |---|---|
 | `conicblend_circle.hpp` | 3-pt circle windows: `VecN`/`CircleWindow`/`blend_curve`; 3D aliases; `FC_NO_EXCEPTIONS` |
-| `conicblend.hpp` | 5-pt conic windows: `ConicWindow<Dim>`, `LagrangeWindow<Dim>`, `FHWindow<Dim,D>`, `FHWindow3`; `blend_curve<Dim,Fallback>(..., conic_tag{})` |
+| `conicblend.hpp` | 5-pt conic windows: `ConicWindow<Dim>`, `LagrangeWindow<Dim>`, `FHWindow<Dim,Depth>`, `FHWindow3`; `blend_curve<Dim,Fallback>(..., conic_tag{})` |
 | `conicblend_cylinder.hpp` | 3D cylinder windows: `CylSol`, `cyl_solve` (2D-Newton Lichtblau), `CylinderWindow<3>`; `blend_curve<Dim,Fallback>(..., cylinder_tag{})` |
 | `conicblend_nd.hpp` | N-dim unified header: `CliffordWindow<N>` (Clifford torus → cylinder → conic 3-level fallback); `blend_curve<N,Fallback>(..., nd_tag{})` |
-| `test_clifford_nd.cpp` | 21-test regression suite: T1–T5 (Clifford/cylinder/conic/blend), T6 (FHWindow knot exactness + D=4≡Lagrange) |
+| `test_clifford_nd.cpp` | 21-test regression suite: T1–T5 (Clifford/cylinder/conic/blend), T6 (FHWindow knot exactness + Depth=4≡Lagrange) |
 | `test_cylinder_edge.cpp` | 29-test edge-case suite: collinear/line-mode, planar fallback, circle/helix exact, tilted axis, best-fit gate |
 | `diag_clifford.cpp` | 30-case Clifford torus stress test: varied r₁,r₂,ω₁,ω₂, dt, spacing; 27/30 pass (3 unfixable aliasing cases) |
 | `demo.cpp` | 13 tests (3D circle): helix, torus knot, C^N, collinearity, exact circle, input validation |

@@ -99,18 +99,20 @@ Every `blend_curve` overload accepts an optional `Fallback` template parameter
 (default: `LagrangeWindow`) for windows where the geometric fit fails:
 
 ```cpp
-// Use Floater-Hormann D=3 rational fallback instead of degree-4 polynomial:
+// Use Floater-Hormann Depth=3 rational fallback instead of degree-4 polynomial:
 auto r = fc::blend_curve<4, fc::FHWindow3>(ctrl, times, fc::nd_tag{}, 80, 2);
 
-// Explicit D:
-template<int D> using FH1 = fc::FHWindow<D, 1>;
+// Explicit Depth:
+template<int Dim> using FH1 = fc::FHWindow<Dim, 1>;
 auto r = fc::blend_curve<3, FH1>(ctrl, times, fc::cylinder_tag{}, 80, 2);
 ```
 
-`FHWindow<Dim, D>` is a pole-free barycentric rational interpolant (Floater-Hormann
+`FHWindow<Dim, Depth>` is a pole-free barycentric rational interpolant (Floater-Hormann
 2007). Unlike per-coordinate rationals, its weights depend only on the node times —
-not coordinate values — making it rotationally invariant. D=4 reduces exactly to
-`LagrangeWindow`; D=3 (default via `FHWindow3`) matches Lagrange's O(h⁵) accuracy.
+not coordinate values — making it rotationally invariant. `Depth` is the degree of the
+local polynomial sub-interpolants being blended (not the degree of the resulting rational).
+`Depth=4` reduces exactly to `LagrangeWindow`; `Depth=3` (default via `FHWindow3`)
+matches Lagrange's O(h⁵) accuracy.
 
 ---
 
@@ -136,7 +138,7 @@ cmake -B build && cmake --build build && ctest --test-dir build
 ```
 
 Test coverage: exact interpolation, C^N continuity, similarity/affine invariance,
-collinearity guards, all fallback levels, FHWindow identity (D=4=Lagrange),
+collinearity guards, all fallback levels, FHWindow identity (Depth=4=Lagrange),
 nD (Dim=2…6), Clifford torus helices, cylinder helices and twisted cubics.
 
 ---
