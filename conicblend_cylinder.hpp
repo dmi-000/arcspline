@@ -456,7 +456,12 @@ static inline CylBFSol cyl_best_fit(const VecN<3> pts5[5], double win_scale)
 //   1. Exact-fit cylinder (Newton solver) + ConicWindow<2>
 //   2. Best-fit cylinder (grid search on S²) + ConicWindow<2>,
 //      only if max surface residual < 5% of window scale
-//   3. Caller falls back to LagrangeWindow<3> (valid() == false)
+//   3. Planar conic: project 5 pts to best-fit plane, apply ConicWindow<2>,
+//      only if max ⊥-distance from plane < 0.1% of window scale.
+//      Handles parabola/hyperbola arcs and other planar non-circular conics.
+//      Circles and ellipses in any 3D plane already succeed at level 1
+//      (natural cylinder axis ⊥ plane → unrolled z=0 → line mode).
+//   4. Caller falls back to LagrangeWindow<3> (valid() == false)
 
 template <int Dim>
 class CylinderWindow;   // defined only for Dim=3
@@ -465,11 +470,17 @@ template <>
 class CylinderWindow<3> {
     bool valid_        = false;
     bool use_best_fit_ = false;   // true → level 2 (best-fit) was used
+    bool use_planar_   = false;   // true → level 3 (planar conic) was used
 
+    // Level 1/2 cylinder state
     VecN<3> u_hat_{}, v_hat_{}, w_hat_{}, offset_{};
     double  r_ = 0.0;
     using Inner2D = ConicWindow<2>;
     Inner2D inner_2d_;
+
+    // Level 3 planar-conic state
+    VecN<3> plane_ctr_{}, plane_e1_{}, plane_e2_{};
+    Inner2D plane_win_;
 
     // Shared helper: unroll pts5 onto a cylinder (u_hat, v_hat, w_hat, offset, r)
     // and attempt ConicWindow<2>.  Fills members and returns true on success.
@@ -497,6 +508,21 @@ class CylinderWindow<3> {
         Inner2D win(upts[0],upts[1],upts[2],upts[3],upts[4],
                     t0,t1,t2,t3,t4);
         if (!win.valid()) return false;
+        // Roundtrip check: re-roll each knot and compare with original 3D point.
+        // Catches degenerate cylinders (e.g. parabola sections where cyl_solve
+        // finds a formal solution but the reconstruction is inaccurate).
+        double spread = 0.0;
+        for (int i = 0; i < 5; ++i)
+            for (int j = i+1; j < 5; ++j)
+                spread = std::max(spread, (pts5[i]-pts5[j]).norm());
+        const double ts5[5] = {t0,t1,t2,t3,t4};
+        for (int k = 0; k < 5; ++k) {
+            VecN<2> uv  = win(ts5[k]);
+            double  ph  = uv[0] / r;
+            double  zk  = uv[1];
+            VecN<3> rec = off + u*zk + v*(r*std::cos(ph)) + w*(r*std::sin(ph));
+            if ((rec - pts5[k]).norm() > 1e-6 * spread) return false;
+        }
         u_hat_ = u; v_hat_ = v; w_hat_ = w; offset_ = off; r_ = r;
         inner_2d_ = std::move(win);
         return true;
@@ -540,14 +566,57 @@ public:
                 return;
             }
         }
+
+        // ── Level 3: planar conic fallback ────────────────────────────────
+        // Triggered when the 5 pts are nearly coplanar.  Such points cannot
+        // lie on any right circular cylinder (whose cross-sections are always
+        // ellipses), so levels 1 and 2 always fail for parabolic or hyperbolic
+        // arcs in a plane.  Circles and ellipses succeed at level 1 instead
+        // (natural cylinder ⊥ plane → unrolled z=0 → ConicWindow line mode).
+        //
+        // Algorithm: project to the best-fit plane, hand the 2D points to
+        // ConicWindow<2>, then re-lift via the plane's orthonormal basis.
+        // Gate: max ⊥-distance from plane < 0.1% of window scale (same order
+        // as the fit_error_ threshold used inside ConicWindow<2>).
+        {
+            auto pf = detail::best_fit_plane<3>(pts5);
+            // Normal to plane = e1 × e2 (unit, since e1,e2 are orthonormal)
+            VecN<3> normal = detail::cyl_cross3(pf.e1, pf.e2);
+            double max_perp = 0.0;
+            for (int k = 0; k < 5; ++k) {
+                double d = std::abs((pts5[k] - pf.center).dot(normal));
+                if (d > max_perp) max_perp = d;
+            }
+            if (max_perp < 1e-3 * win_scale) {
+                VecN<2> ppts[5];
+                for (int k = 0; k < 5; ++k)
+                    ppts[k] = VecN<2>{pf.pts2d[k][0], pf.pts2d[k][1]};
+                Inner2D pw(ppts[0],ppts[1],ppts[2],ppts[3],ppts[4],
+                           t0,t1,t2,t3,t4);
+                if (pw.valid()) {
+                    plane_ctr_ = pf.center;
+                    plane_e1_  = pf.e1;
+                    plane_e2_  = pf.e2;
+                    plane_win_ = std::move(pw);
+                    use_planar_ = true;
+                    valid_      = true;
+                    return;
+                }
+            }
+        }
         // valid_ stays false → blend_curve falls back to LagrangeWindow<3>
     }
 
     bool valid()          const { return valid_; }
     bool used_cylinder()  const { return valid_; }   // always true when valid
     bool used_best_fit()  const { return use_best_fit_; }
+    bool used_planar()    const { return use_planar_; }
 
     VecN<3> operator()(double t) const {
+        if (use_planar_) {
+            VecN<2> uv = plane_win_(t);
+            return plane_ctr_ + plane_e1_ * uv[0] + plane_e2_ * uv[1];
+        }
         VecN<2> uv  = inner_2d_(t);
         double  phi = uv[0] / r_;
         double  z   = uv[1];

@@ -208,29 +208,74 @@ static void test7_best_fit_gate() {
     CHECK("T7  non-cylindrical set: max_surf_res > 5e-2", bf.max_surf_res > 5e-2);
 }
 
-// ── Test 9: CylinderWindow coplanar input → valid()=false ─────────────────
+// ── Test 9: CylinderWindow coplanar degenerate-conic → valid()=false ──────
 //
-// 5 coplanar points (z=0 plane, not collinear, not on any finite cylinder).
-// cyl_solve finds no exact cylinder; cyl_best_fit gets max_surf_res > 5e-2
-// because no finite cylinder can approximate a flat configuration well.
-// CylinderWindow must be invalid — blend_curve falls back to LagrangeWindow<3>.
+// 5 coplanar points (z=0 plane) whose unique algebraic conic is degenerate:
+// the system (1,0),(0,1),(-1,0),(0,-1),(0.5,0.5) determines (x+y)²=1, which
+// factors as two parallel lines x+y=1 and x+y=-1.
 //
-// NOTE: best-fit cylinder path (used_best_fit()=true) is NOT currently exercised
-// by any test.  Triggering it requires 5 points where every exact-fit cylinder
-// produces an invalid ConicWindow<2> (non-monotone φ or large fit_error), yet
-// the grid-search best-fit finds a cylinder with max_surf_res < 5e-2.  Such a
-// configuration is hard to construct analytically; coverage of that path is left
-// to future work or a dedicated empirical regression.
+// Level 1: cyl_solve finds no exact finite cylinder through them.
+// Level 2: cyl_best_fit max_surf_res > 5e-2 (no circle fits the points well).
+// Level 3: planar fallback detects coplanarity and attempts ConicWindow<2> on
+//          the z=0 projection, but ConicWindow<2> rejects the degenerate conic
+//          (pair of lines → singular conic matrix → bad orbit → fit_error >> 1e-3).
+// Result: valid()=false, all "used_*" flags false.
+//
+// NOTE: used_best_fit()=true path not exercised — see T9 predecessor comment.
+// NOTE: used_planar()=true path is exercised by T11 (parabola arc in 3D plane).
 static void test9_coplanar() {
-    std::printf("\n── T9: CylinderWindow coplanar input → valid()=false ───────────────\n");
+    std::printf("\n── T9: CylinderWindow coplanar degenerate conic → valid()=false ────\n");
 
-    // 5 points in the z=0 plane, in general position (not collinear)
+    // 5 points in the z=0 plane — unique 2D conic is (x+y)²=1 (two lines)
     V3 pts[5] = {{1,0,0},{0,1,0},{-1,0,0},{0,-1,0},{0.5,0.5,0}};
     double ts[5] = {0,1,2,3,4};
     CylinderWindow<3> w(pts[0],pts[1],pts[2],pts[3],pts[4], ts[0],ts[1],ts[2],ts[3],ts[4]);
 
-    CHECK("T9a coplanar: valid()=false",       !w.valid());
-    CHECK("T9b coplanar: used_best_fit=false",  !w.used_best_fit());
+    CHECK("T9a coplanar degenerate conic: valid()=false",      !w.valid());
+    CHECK("T9b coplanar degenerate conic: used_best_fit=false", !w.used_best_fit());
+    CHECK("T9c coplanar degenerate conic: used_planar=false",   !w.used_planar());
+}
+
+// ── Test 11: CylinderWindow planar conic fallback — parabola in 3D ─────────
+//
+// A parabolic arc in a 3D plane cannot lie on any right circular cylinder
+// (cylinders have only elliptic cross-sections), so levels 1 and 2 always
+// fail.  Level 3 (planar conic) detects the coplanarity, projects to 2D, and
+// fits the parabola via ConicWindow<2>.
+//
+// Construction: parabola y = x² traversed on one arm (x = 1..5), in the
+// oblique plane y = z (normal (0,1,-1)/√2).
+//   e1 = (1,0,0),  e2 = (0,1,1)/√2
+//   2D points: (k+1, (k+1)²) for k=0..4
+//   → in 3D: pts[k] = ((k+1),  (k+1)²/√2,  (k+1)²/√2)
+// All pts satisfy y=z (coplanar).  One-arm traversal → φ monotone → valid().
+// Levels 1 & 2 are rejected by the roundtrip gate; level 3 fits via ConicWindow<2>.
+static void test11_planar_parabola() {
+    std::printf("\n── T11: CylinderWindow planar fallback — parabola in y=z plane ─────\n");
+
+    // pts[k] = (k+1, v/√2, v/√2)  where  v = (k+1)²
+    const double sq2 = std::sqrt(2.0);
+    V3 pts[5];
+    double ts[5];
+    for (int k = 0; k < 5; ++k) {
+        double u = (double)(k + 1);
+        double v = u * u;
+        pts[k] = V3{u, v/sq2, v/sq2};
+        ts[k]  = (double)k;
+    }
+    CylinderWindow<3> w(pts[0],pts[1],pts[2],pts[3],pts[4], ts[0],ts[1],ts[2],ts[3],ts[4]);
+
+    CHECK("T11a planar parabola: valid=true",      w.valid());
+    CHECK("T11b planar parabola: used_planar=true", w.used_planar());
+    CHECK("T11c planar parabola: no best-fit",      !w.used_best_fit());
+
+    double max_err = 0.0;
+    for (int k = 0; k < 5; ++k) {
+        V3 p = w(ts[k]);
+        max_err = std::max(max_err, (p - pts[k]).norm());
+    }
+    std::printf("     max knot error = %.2e\n", max_err);
+    CHECK("T11d planar parabola: knots exact (< 1e-12)", max_err < 1e-12);
 }
 
 // ── Test 10: CylinderWindow tilted cylinder axis=(1,1,0)/√2 ───────────────
@@ -300,7 +345,7 @@ static void test8_blend_regression() {
 // ── main ──────────────────────────────────────────────────────────────────
 int main()
 {
-    std::printf("=== test_cylinder_edge: 10 edge-case tests ===\n");
+    std::printf("=== test_cylinder_edge: 11 edge-case tests ===\n");
 
     test1_line_mode();
     test2_scale_invariance();
@@ -311,6 +356,7 @@ int main()
     test7_best_fit_gate();
     test9_coplanar();
     test10_tilted_cylinder();
+    test11_planar_parabola();
     test8_blend_regression();
 
     std::printf("\n%d/%d passed\n", n_pass, n_pass + n_fail);
