@@ -453,6 +453,16 @@ rational that is not itself a cubic.
 | 2 | 3 quadratics | O(h⁴) | |
 | 1 | 4 linears | O(h³) | |
 
+Clearing the barycentric denominators shows the resulting rational is **[4/4]**
+for all `Depth` values 1–3, and **[4/0]** (polynomial) for `Depth=4`.
+
+**Not a Padé [p/q] approximant.** A shared-denominator [3/1] rational through
+5 points in ℝᴺ (N≥2) is overdetermined: exact interpolation at all 5 knots and
+rotational invariance (scalar denominator) cannot both be satisfied simultaneously
+by a classical rational fit.  The barycentric form achieves all three — exact
+interpolation, pole-free, rotationally invariant — properties Padé cannot provide
+jointly for N≥2.
+
 Guaranteed no real poles by the FH theorem.  Always `valid()`.
 
 #### Embedded / no-exceptions builds

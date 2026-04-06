@@ -978,6 +978,12 @@ struct LagrangeWindow {
 //   Depth=1 → blends 4 linears,    O(h^3)
 //
 // Guaranteed no real poles (FH theorem). Always valid(). Evaluation O(5·Dim).
+//
+// Not a Padé [p/q] approximant. A shared-denominator [3/1] rational through
+// 5 points in ℝᴺ (N≥2) is overdetermined: exact interpolation and rotational
+// invariance cannot both be satisfied simultaneously by a classical rational
+// fit. The barycentric form achieves all three — exact interpolation, no poles,
+// rotational invariance — properties Padé cannot provide jointly for N≥2.
 
 template <int Dim, int Depth = 3>
 struct FHWindow {
