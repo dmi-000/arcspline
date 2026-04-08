@@ -134,24 +134,82 @@ struct SymEig {
 // ── Fit conic to exactly 5 2D points ─────────────────────────────────────
 //
 // Design matrix M[i] = [x²,x·y,y²,x,y,1] (5×6).
-// We want the null vector of M — the smallest eigenvector of M^T·M (6×6).
-// Returns [A,B,C,D,E,F] in coeffs[6].  Not normalized.
+// We want a null vector of M: a non-zero [A,B,C,D,E,F] such that M·c = 0.
+// For exactly 5 points the null space is 1-dimensional.
+//
+// Method: Gaussian elimination with full column pivoting on the 5×6 matrix.
+// This directly solves for the null vector in O(5²·6) operations without any
+// iteration — numerically stable and reproducible across platforms, unlike
+// eigendecomposition of M^T·M whose smallest eigenvector is ill-conditioned
+// when the null eigenvalue is near zero.
+//
+// Returns [A,B,C,D,E,F] in coeffs[6], unit-normalised.
 
 inline void fit_conic_2d(double const pts[5][2], double coeffs[6])
 {
-    // Build M^T * M  (6×6 symmetric)
-    double MtM[6][6] = {};
+    // Build 5×6 design matrix
+    double M[5][6];
     for (int i = 0; i < 5; ++i) {
         double x = pts[i][0], y = pts[i][1];
-        double row[6] = {x*x, x*y, y*y, x, y, 1.0};
-        for (int r = 0; r < 6; ++r)
-            for (int c = 0; c < 6; ++c)
-                MtM[r][c] += row[r] * row[c];
+        M[i][0]=x*x; M[i][1]=x*y; M[i][2]=y*y;
+        M[i][3]=x;   M[i][4]=y;   M[i][5]=1.0;
     }
-    SymEig<6> eig;
-    eig.compute(MtM);
-    // Smallest eigenvalue → conic null vector
-    for (int i = 0; i < 6; ++i) coeffs[i] = eig.vec[0][i];
+
+    // Gaussian elimination with full column pivoting.
+    // After reduction, the last un-pivoted column is the free variable.
+    int pivot_col[5];     // which column was chosen at each step
+    bool used[6] = {};    // columns already chosen as pivots
+
+    for (int step = 0; step < 5; ++step) {
+        // Find column with largest 2-norm among rows step..4
+        int best_c = -1;
+        double best_n = -1.0;
+        for (int c = 0; c < 6; ++c) {
+            if (used[c]) continue;
+            double n2 = 0.0;
+            for (int r = step; r < 5; ++r) n2 += M[r][c]*M[r][c];
+            if (n2 > best_n) { best_n = n2; best_c = c; }
+        }
+        pivot_col[step] = best_c;
+        used[best_c] = true;
+
+        // Find pivot row (largest absolute value in this column, rows step..4)
+        int pr = step;
+        for (int r = step+1; r < 5; ++r)
+            if (std::abs(M[r][best_c]) > std::abs(M[pr][best_c])) pr = r;
+        if (pr != step)
+            for (int c = 0; c < 6; ++c) std::swap(M[step][c], M[pr][c]);
+
+        // Eliminate below
+        double piv = M[step][best_c];
+        if (std::abs(piv) < 1e-30) continue;  // numerically zero column
+        for (int r = step+1; r < 5; ++r) {
+            double f = M[r][best_c] / piv;
+            for (int c = 0; c < 6; ++c) M[r][c] -= f * M[step][c];
+        }
+    }
+
+    // The free column (not used as a pivot) gives the null vector direction.
+    // Set the free variable to 1; back-substitute to get pivot variables.
+    int free_c = -1;
+    for (int c = 0; c < 6; ++c) if (!used[c]) { free_c = c; break; }
+
+    double sol[6] = {};
+    sol[free_c] = 1.0;
+    for (int step = 4; step >= 0; --step) {
+        int pc = pivot_col[step];
+        double rhs = -M[step][free_c];
+        for (int s2 = step+1; s2 < 5; ++s2)
+            rhs -= M[step][pivot_col[s2]] * sol[pivot_col[s2]];
+        double piv = M[step][pc];
+        sol[pc] = (std::abs(piv) > 1e-30) ? rhs / piv : 0.0;
+    }
+
+    // Normalise to unit length
+    double n2 = 0.0;
+    for (int i = 0; i < 6; ++i) n2 += sol[i]*sol[i];
+    double inv_n = (n2 > 0.0) ? 1.0/std::sqrt(n2) : 1.0;
+    for (int i = 0; i < 6; ++i) coeffs[i] = sol[i] * inv_n;
 }
 
 // ── Closed-form 2×2 symmetric eigensolver ────────────────────────────────

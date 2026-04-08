@@ -34,8 +34,3 @@ jobs:
       - name: Run demo_conic
         run: ./demo_conic
 
-      - name: Build diag_conic_linux (conic window debug)
-        run: ${{ matrix.compiler }} -std=c++17 -O2 -I. -o diag_conic_linux diag_conic_linux.cpp
-
-      - name: Run diag_conic_linux
-        run: ./diag_conic_linux
