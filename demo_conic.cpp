@@ -239,18 +239,16 @@ void test_input_validation()  // was Test 4, now Test 5
 
 // ── Test 6: used_conic diagnostic parameter ────────────────────────────────
 //
-// Verifies the out-parameter reports true when conic windows are used and
-// false when the call falls back to circle windows (collinear input).
+// Verifies the out-parameter reports true when conic windows are used.
+// Collinear input: ConicWindow uses line_mode_ (Lagrange within a degenerate
+// conic), so valid_=true and used_conic=true — a collinear window is still a
+// ConicWindow (degenerate conic = straight line).  Exact interpolation holds.
 
 void test_used_conic_flag()
 {
     constexpr int Dim = 2;
 
-    // (a) Tilted ellipse (2D, same as test_tilted_ellipse): exact conic input →
-    //     all ConicWindows valid → used_conic=true.
-    //     (The 3D helix has windows with collinear projected 2D points due to
-    //     symmetric t-spacing, which correctly makes ConicWindow invalid for those
-    //     windows, causing the whole curve to fall back to circle windows.)
+    // (a) Tilted ellipse: exact conic input → all ConicWindows valid → used_conic=true.
     {
         double ca = std::cos(PI/6.0), sa = std::sin(PI/6.0);
         int n = 16;
@@ -269,7 +267,8 @@ void test_used_conic_flag()
         std::printf("  tilted_ellipse: used_conic = %s\n", flag ? "true" : "false");
     }
 
-    // (b) Collinear input: ConicWindow::valid()=false → fallback → used_conic=false
+    // (b) Collinear input: line_mode_ fires → used_conic=true (degenerate conic),
+    //     exact interpolation at all control points.
     {
         int n = 8;
         std::vector<VecN<Dim>> ctrl(n);
@@ -278,10 +277,28 @@ void test_used_conic_flag()
             ctrl[i]  = VecN<Dim>(static_cast<double>(i), 0.0);  // all on x-axis
             times[i] = static_cast<double>(i);
         }
-        bool flag = true;
-        blend_curve<Dim>(ctrl, times, conic_tag{}, 40, 2, &flag);
-        if (flag) fail("used_conic_flag", "expected used_conic=false for collinear input");
+        bool flag = false;
+        auto result = blend_curve<Dim>(ctrl, times, conic_tag{}, 40, 2, &flag);
+        if (!flag) fail("used_conic_flag", "expected used_conic=true for collinear (line_mode_)");
         std::printf("  collinear: used_conic = %s\n", flag ? "true" : "false");
+
+        // Exact interpolation at interior knots (indices 2..n-3)
+        double max_err = 0.0;
+        for (int i = 2; i <= n-3; ++i) {
+            double t = times[i];
+            // find closest output point
+            double best = 1e99;
+            for (size_t j = 0; j < result.pts.size(); ++j) {
+                if (std::abs(result.times[j] - t) < std::abs(best - t)) best = result.times[j];
+            }
+            // evaluate at exact knot by scanning result
+            for (size_t j = 0; j < result.pts.size(); ++j) {
+                if (result.times[j] == t)
+                    max_err = std::max(max_err, (result.pts[j] - ctrl[i]).norm());
+            }
+        }
+        std::printf("  collinear interp max err = %.2e\n", max_err);
+        if (max_err > 1e-12) fail("used_conic_flag", "collinear interp error too large");
     }
 
     pass("used_conic_flag");
