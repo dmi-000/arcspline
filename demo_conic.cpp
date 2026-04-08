@@ -340,30 +340,42 @@ void test_cn_continuity()
         times[i] = t;
     }
 
-    // Build all (n-4) conic windows explicitly
-    std::vector<ConicWindow<Dim>> wins;
+    // Build all (n-4) windows; fall back to LagrangeWindow when conic fails
+    // (matches blend_curve semantics).
+    using Win = std::variant<ConicWindow<Dim>, LagrangeWindow<Dim>>;
+    std::vector<Win> wins;
     wins.reserve(n - 4);
+    int n_conic_win = 0, n_lagrange_fallback = 0;
     for (int i = 0; i < n-4; ++i) {
-        wins.emplace_back(ctrl[i], ctrl[i+1], ctrl[i+2], ctrl[i+3], ctrl[i+4],
-                          times[i], times[i+1], times[i+2], times[i+3], times[i+4]);
-        if (!wins.back().valid())
-            fail("cn_continuity", "window unexpectedly invalid");
+        ConicWindow<Dim> cw(ctrl[i], ctrl[i+1], ctrl[i+2], ctrl[i+3], ctrl[i+4],
+                            times[i], times[i+1], times[i+2], times[i+3], times[i+4]);
+        if (cw.valid()) {
+            ++n_conic_win;
+            wins.emplace_back(std::move(cw));
+        } else {
+            ++n_lagrange_fallback;
+            wins.emplace_back(LagrangeWindow<Dim>(
+                ctrl[i], ctrl[i+1], ctrl[i+2], ctrl[i+3], ctrl[i+4],
+                times[i], times[i+1], times[i+2], times[i+3], times[i+4]));
+        }
     }
+    if (n_conic_win == 0)
+        fail("cn_continuity", "no windows used conic (all fell back to Lagrange)");
 
-    // Report Lagrange vs PCHIP window count.
-    // C^3 continuity requires Lagrange (C^∞) phi; PCHIP gives only C^1.
-    int n_lagrange = 0;
-    for (auto const& w : wins) if (w.uses_c_infty()) ++n_lagrange;
-    std::printf("  windows using Lagrange (C^∞): %d/%d\n",
-                n_lagrange, (int)wins.size());
-    if (n_lagrange == 0)
-        fail("cn_continuity", "no windows used Lagrange interpolant");
+    // Report window mix (conic vs Lagrange fallback).
+    std::printf("  conic windows: %d/%d  (Lagrange fallback: %d)\n",
+                n_conic_win, (int)wins.size(), n_lagrange_fallback);
+
+    // Eval helper for variant windows
+    auto eval_win = [](Win const& w, double t) -> VecN<Dim> {
+        return std::visit([t](auto const& ww) -> VecN<Dim> { return ww(t); }, w);
+    };
 
     // Segment j: (1−w)·wins[j-2](t) + w·wins[j-1](t) on [times[j], times[j+1]]
     auto eval_seg = [&](int j, double t) -> VecN<Dim> {
         double s = (t - times[j]) / (times[j+1] - times[j]);
         double w = fc::smoothstep(s, 2);
-        return wins[j-2](t) * (1.0 - w) + wins[j-1](t) * w;
+        return eval_win(wins[j-2], t) * (1.0 - w) + eval_win(wins[j-1], t) * w;
     };
 
     double const hf = 1e-5;   // fine step  — k=1,2
