@@ -261,6 +261,20 @@ void test_used_conic_flag()
             ctrl[i]  = VecN<Dim>(ca*x - sa*y, sa*x + ca*y);
             times[i] = t;
         }
+        // Diagnostic: check each window directly
+        int n_valid = 0, n_invalid = 0;
+        double max_fit_err = 0.0;
+        for (int i = 0; i < n-4; ++i) {
+            ConicWindow<Dim> cw(ctrl[i], ctrl[i+1], ctrl[i+2], ctrl[i+3], ctrl[i+4],
+                                times[i], times[i+1], times[i+2], times[i+3], times[i+4]);
+            if (cw.valid()) { ++n_valid; max_fit_err = std::max(max_fit_err, cw.fit_error()); }
+            else             { ++n_invalid; }
+            if (i == 0)
+                std::printf("  win0: valid=%d fit_err=%.3e\n", (int)cw.valid(), cw.fit_error());
+        }
+        std::printf("  ellipse windows: valid=%d invalid=%d max_fit_err=%.3e\n",
+                    n_valid, n_invalid, max_fit_err);
+
         bool flag = false;
         blend_curve<Dim>(ctrl, times, conic_tag{}, 40, 2, &flag);
         if (!flag) fail("used_conic_flag", "expected used_conic=true for tilted ellipse");
