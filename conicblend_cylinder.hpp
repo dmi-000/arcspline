@@ -537,57 +537,31 @@ public:
     {
         VecN<3> pts5[5] = {p0,p1,p2,p3,p4};
 
-        // ── Level 1: exact-fit cylinders (Newton solver) ─────────────────
-        // Sorted: geodesic first, then phi_span ascending.
-        // ConicWindow<2> handles both line-mode (geodesic) and conic cases.
-        auto cyls = detail::cyl_solve(pts5);
-        for (auto& cs : cyls) {
-            if (try_cylinder_(pts5, cs.u_hat, cs.v_hat, cs.w_hat, cs.offset, cs.r,
-                              t0,t1,t2,t3,t4)) {
-                valid_ = true;
-                return;
-            }
-        }
-
-        // ── Level 2: best-fit cylinder ────────────────────────────────────
-        // Gate: only proceed if max surface residual < 5% of window scale.
-        // Invariant: residual/win_scale is dimensionless, rigid-motion invariant.
         double win_scale = 0.0;
         for (int i = 0; i < 5; ++i)
             for (int j = i+1; j < 5; ++j)
                 win_scale = std::max(win_scale, (pts5[i]-pts5[j]).norm());
 
-        auto bf = detail::cyl_best_fit(pts5, win_scale);
-        if (bf.max_surf_res < 5e-2) {
-            if (try_cylinder_(pts5, bf.u_hat, bf.v_hat, bf.w_hat, bf.offset, bf.r,
-                              t0,t1,t2,t3,t4)) {
-                use_best_fit_ = true;
-                valid_        = true;
-                return;
-            }
-        }
-
-        // ── Level 3: planar conic fallback ────────────────────────────────
-        // Triggered when the 5 pts are nearly coplanar.  Such points cannot
-        // lie on any right circular cylinder (whose cross-sections are always
-        // ellipses), so levels 1 and 2 always fail for parabolic or hyperbolic
-        // arcs in a plane.  Circles and ellipses succeed at level 1 instead
-        // (natural cylinder ⊥ plane → unrolled z=0 → ConicWindow line mode).
+        // ── Level 3 (first): planar conic fallback ────────────────────────
+        // Check coplanarity BEFORE cylinder fits.  For coplanar points, the
+        // 5-point cylinder solver always finds some cylinder through them
+        // (5 DOF match 5 constraints), so levels 1/2 would succeed trivially —
+        // but the resulting cylinder is geometrically wrong (the cross-sections
+        // of a right circular cylinder are ellipses, not parabolas/hyperbolas).
+        // The flat 2D conic is the correct and more accurate fit for coplanar
+        // arcs: parabolas, hyperbolas, and ellipses all map to machine-precision
+        // ConicWindow fits, while the cylinder path gives O(h⁵) approximation.
         //
-        // Algorithm: project to the best-fit plane, hand the 2D points to
-        // ConicWindow<2>, then re-lift via the plane's orthonormal basis.
-        // Gate: max ⊥-distance from plane < 0.1% of window scale (same order
-        // as the fit_error_ threshold used inside ConicWindow<2>).
+        // Gate: max ⊥-distance from best-fit plane < 0.1% of window scale.
         {
             auto pf = detail::best_fit_plane<3>(pts5);
-            // Normal to plane = e1 × e2 (unit, since e1,e2 are orthonormal)
             VecN<3> normal = detail::cyl_cross3(pf.e1, pf.e2);
             double max_perp = 0.0;
             for (int k = 0; k < 5; ++k) {
                 double d = std::abs((pts5[k] - pf.center).dot(normal));
                 if (d > max_perp) max_perp = d;
             }
-            if (max_perp < 1e-3 * win_scale) {
+            if (max_perp < 1e-6 * win_scale) {
                 VecN<2> ppts[5];
                 for (int k = 0; k < 5; ++k)
                     ppts[k] = VecN<2>{pf.pts2d[k][0], pf.pts2d[k][1]};
@@ -602,6 +576,30 @@ public:
                     valid_      = true;
                     return;
                 }
+            }
+        }
+
+        // ── Level 1: exact-fit cylinders (Newton solver) ─────────────────
+        // Only reached for non-coplanar (3D) data: helices, geodesics, etc.
+        // Sorted: geodesic first, then phi_span ascending.
+        auto cyls = detail::cyl_solve(pts5);
+        for (auto& cs : cyls) {
+            if (try_cylinder_(pts5, cs.u_hat, cs.v_hat, cs.w_hat, cs.offset, cs.r,
+                              t0,t1,t2,t3,t4)) {
+                valid_ = true;
+                return;
+            }
+        }
+
+        // ── Level 2: best-fit cylinder ────────────────────────────────────
+        // Gate: only proceed if max surface residual < 5% of window scale.
+        auto bf = detail::cyl_best_fit(pts5, win_scale);
+        if (bf.max_surf_res < 5e-2) {
+            if (try_cylinder_(pts5, bf.u_hat, bf.v_hat, bf.w_hat, bf.offset, bf.r,
+                              t0,t1,t2,t3,t4)) {
+                use_best_fit_ = true;
+                valid_        = true;
+                return;
             }
         }
         // valid_ stays false → blend_curve falls back to LagrangeWindow<3>

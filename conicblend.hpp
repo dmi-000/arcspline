@@ -519,18 +519,6 @@ inline PlaneND<Dim> best_fit_plane(VecN<Dim> const pts[5])
     }
     raw_e2 = raw_e2 * (1.0/n2);
 
-    // Fix sign of e2: find component with largest absolute value and make it positive.
-    // This gives a canonical, platform-independent sign for e2 (analogous to the
-    // chord-direction convention for e1).  Without this, SymEig<Dim> may return
-    // -e2 on one platform vs +e2 on another, causing pts2d[][1] to flip sign,
-    // which changes B→-B and E→-E in the conic equation and breaks the orbit.
-    {
-        int j_max = 0;
-        for (int i = 1; i < Dim; ++i)
-            if (std::abs(raw_e2[i]) > std::abs(raw_e2[j_max])) j_max = i;
-        if (raw_e2[j_max] < 0.0) raw_e2 = raw_e2 * -1.0;
-    }
-
     pl.e1 = raw_e1;
     pl.e2 = raw_e2;
 
@@ -620,7 +608,7 @@ public:
         VecN<Dim> const& p3, VecN<Dim> const& p4,
         double t0, double t1, double t2, double t3, double t4,
         bool allow_cross_branch = false)
-        : valid_(false)
+        : valid_(false), line_mode_(false), fit_error_(0.0)
     {
         VecN<Dim> pts5[5] = {p0, p1, p2, p3, p4};
         ts_[0]=t0; ts_[1]=t1; ts_[2]=t2; ts_[3]=t3; ts_[4]=t4;
