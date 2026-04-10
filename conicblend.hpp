@@ -155,6 +155,18 @@ inline void fit_conic_2d(double const pts[5][2], double coeffs[6])
         M[i][3]=x;   M[i][4]=y;   M[i][5]=1.0;
     }
 
+    // Column normalization: scale each column to unit 2-norm so that the
+    // pivoting competition is based on residual information content, not
+    // the absolute scale of x², xy, y², x, y, 1 (which differ by ~100×).
+    // The scale factors are recorded to undo the normalization in the solution.
+    double col_scale[6];
+    for (int c = 0; c < 6; ++c) {
+        double s = 0.0;
+        for (int r = 0; r < 5; ++r) s += M[r][c] * M[r][c];
+        col_scale[c] = (s > 0.0) ? 1.0 / std::sqrt(s) : 1.0;
+        for (int r = 0; r < 5; ++r) M[r][c] *= col_scale[c];
+    }
+
     // Gaussian elimination with full column pivoting.
     // After reduction, the last un-pivoted column is the free variable.
     int pivot_col[5];     // which column was chosen at each step
@@ -204,6 +216,10 @@ inline void fit_conic_2d(double const pts[5][2], double coeffs[6])
         double piv = M[step][pc];
         sol[pc] = (std::abs(piv) > 1e-30) ? rhs / piv : 0.0;
     }
+
+    // Undo column normalization: sol[i] is a coefficient for the scaled column,
+    // so the true coefficient is sol[i] * col_scale[i].
+    for (int i = 0; i < 6; ++i) sol[i] *= col_scale[i];
 
     // Normalise to unit length
     double n2 = 0.0;
