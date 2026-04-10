@@ -147,7 +147,7 @@ struct SymEig {
 
 inline void fit_conic_2d(double const pts[5][2], double coeffs[6])
 {
-    // Build 5×6 design matrix
+    // Build 5×6 design matrix M[i] = [x²,xy,y²,x,y,1].
     double M[5][6];
     for (int i = 0; i < 5; ++i) {
         double x = pts[i][0], y = pts[i][1];
@@ -155,77 +155,82 @@ inline void fit_conic_2d(double const pts[5][2], double coeffs[6])
         M[i][3]=x;   M[i][4]=y;   M[i][5]=1.0;
     }
 
-    // Column normalization: scale each column to unit 2-norm so that the
-    // pivoting competition is based on residual information content, not
-    // the absolute scale of x², xy, y², x, y, 1 (which differ by ~100×).
-    // The scale factors are recorded to undo the normalization in the solution.
-    double col_scale[6];
+    // Null-space via constraint normalization.
+    //
+    // For 5 pts on an exact conic, M has rank 5 and a 1-D null space.
+    // Strategy: fix the coefficient with the largest column 2-norm to 1,
+    // then solve the resulting 5×5 square system for the remaining 5 coefficients.
+    //
+    // Choosing the largest-norm column avoids the near-zero free-variable
+    // problem that plagued the free-column approach: if we fixed a coefficient
+    // that is close to zero in the true null vector, the 5×5 sub-system would
+    // be near-singular and the solution would blow up.
+    //
+    // The largest-norm column has the most numerical "signal" in the data, so
+    // the corresponding true coefficient is large → fixing it to 1 gives a
+    // well-conditioned 5×5 system independent of platform-specific FP order.
+
+    // 1. Find column with largest 2-norm (= "most signal in the data").
+    int fix_c = 0;
+    double best_n2 = 0.0;
     for (int c = 0; c < 6; ++c) {
-        double s = 0.0;
-        for (int r = 0; r < 5; ++r) s += M[r][c] * M[r][c];
-        col_scale[c] = (s > 0.0) ? 1.0 / std::sqrt(s) : 1.0;
-        for (int r = 0; r < 5; ++r) M[r][c] *= col_scale[c];
+        double n2 = 0.0;
+        for (int r = 0; r < 5; ++r) n2 += M[r][c]*M[r][c];
+        if (n2 > best_n2) { best_n2 = n2; fix_c = c; }
     }
 
-    // Gaussian elimination with full column pivoting.
-    // After reduction, the last un-pivoted column is the free variable.
-    int pivot_col[5];     // which column was chosen at each step
-    bool used[6] = {};    // columns already chosen as pivots
-
-    for (int step = 0; step < 5; ++step) {
-        // Find column with largest 2-norm among rows step..4
-        int best_c = -1;
-        double best_n = -1.0;
+    // 2. Build 5×6 augmented system [M_other | -M_fix_c] where
+    //    M_other holds the 5 columns != fix_c (in ascending index order),
+    //    and the RHS is -M[:, fix_c] (since coeffs[fix_c] = 1 is fixed).
+    double A[5][6];    // [5×5 sub-matrix | RHS]
+    int    col_map[5]; // col_map[j] = original column index for unknown j
+    {
+        int j = 0;
         for (int c = 0; c < 6; ++c) {
-            if (used[c]) continue;
-            double n2 = 0.0;
-            for (int r = step; r < 5; ++r) n2 += M[r][c]*M[r][c];
-            if (n2 > best_n) { best_n = n2; best_c = c; }
+            if (c == fix_c) continue;
+            col_map[j] = c;
+            for (int r = 0; r < 5; ++r) A[r][j] = M[r][c];
+            j++;
         }
-        pivot_col[step] = best_c;
-        used[best_c] = true;
+        for (int r = 0; r < 5; ++r) A[r][5] = -M[r][fix_c];  // RHS
+    }
 
-        // Find pivot row (largest absolute value in this column, rows step..4)
+    // 3. Gaussian elimination with partial (row) pivoting on the 5×6
+    //    augmented matrix.  The system is square (5 equations, 5 unknowns),
+    //    so standard back-substitution gives the unique solution.
+    for (int step = 0; step < 5; ++step) {
+        // Partial pivot: find row with largest |A[r][step]|, r >= step.
         int pr = step;
         for (int r = step+1; r < 5; ++r)
-            if (std::abs(M[r][best_c]) > std::abs(M[pr][best_c])) pr = r;
+            if (std::abs(A[r][step]) > std::abs(A[pr][step])) pr = r;
         if (pr != step)
-            for (int c = 0; c < 6; ++c) std::swap(M[step][c], M[pr][c]);
+            for (int c = 0; c <= 5; ++c) std::swap(A[step][c], A[pr][c]);
 
-        // Eliminate below
-        double piv = M[step][best_c];
-        if (std::abs(piv) < 1e-30) continue;  // numerically zero column
+        double piv = A[step][step];
+        if (std::abs(piv) < 1e-30) continue;   // near-zero pivot: degenerate input
         for (int r = step+1; r < 5; ++r) {
-            double f = M[r][best_c] / piv;
-            for (int c = 0; c < 6; ++c) M[r][c] -= f * M[step][c];
+            double f = A[r][step] / piv;
+            for (int c = step; c <= 5; ++c) A[r][c] -= f * A[step][c];
         }
     }
 
-    // The free column (not used as a pivot) gives the null vector direction.
-    // Set the free variable to 1; back-substitute to get pivot variables.
-    int free_c = -1;
-    for (int c = 0; c < 6; ++c) if (!used[c]) { free_c = c; break; }
-
-    double sol[6] = {};
-    sol[free_c] = 1.0;
+    // 4. Back-substitution.
+    double sol[5] = {};
     for (int step = 4; step >= 0; --step) {
-        int pc = pivot_col[step];
-        double rhs = -M[step][free_c];
-        for (int s2 = step+1; s2 < 5; ++s2)
-            rhs -= M[step][pivot_col[s2]] * sol[pivot_col[s2]];
-        double piv = M[step][pc];
-        sol[pc] = (std::abs(piv) > 1e-30) ? rhs / piv : 0.0;
+        double rhs = A[step][5];
+        for (int s2 = step+1; s2 < 5; ++s2) rhs -= A[step][s2] * sol[s2];
+        sol[step] = (std::abs(A[step][step]) > 1e-30) ? rhs / A[step][step] : 0.0;
     }
 
-    // Undo column normalization: sol[i] is a coefficient for the scaled column,
-    // so the true coefficient is sol[i] * col_scale[i].
-    for (int i = 0; i < 6; ++i) sol[i] *= col_scale[i];
+    // 5. Assemble full 6-vector and normalise.
+    double full[6] = {};
+    full[fix_c] = 1.0;
+    for (int j = 0; j < 5; ++j) full[col_map[j]] = sol[j];
 
-    // Normalise to unit length
     double n2 = 0.0;
-    for (int i = 0; i < 6; ++i) n2 += sol[i]*sol[i];
+    for (int i = 0; i < 6; ++i) n2 += full[i]*full[i];
     double inv_n = (n2 > 0.0) ? 1.0/std::sqrt(n2) : 1.0;
-    for (int i = 0; i < 6; ++i) coeffs[i] = sol[i] * inv_n;
+    for (int i = 0; i < 6; ++i) coeffs[i] = full[i] * inv_n;
 }
 
 // ── Closed-form 2×2 symmetric eigensolver ────────────────────────────────
