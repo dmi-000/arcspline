@@ -409,6 +409,99 @@ at both levels — the correct answer (no meaningful cylinder frame exists).
 
 ---
 
+**Coplanarity gate reordering (2026-04-10):**
+
+The fallback chain for `CylinderWindow` was originally:
+
+```
+Level 1 (exact Newton) → Level 2 (best-fit) → Level 3 (planar conic)
+```
+
+This ordering had a hidden flaw: `cyl_solve` fits 5 constraints to 5 DOF, so it
+always finds *some* cylinder through 5 coplanar points.  For parabolic or
+hyperbolic arcs in a plane the resulting cylinder is geometrically wrong —
+the cross-sections of a right circular cylinder are always ellipses, so an exact
+arc of a parabola has no valid cylindrical unrolling.  Before the fix, Level 3
+was only reached because `ConicWindow<2>` was inadvertently invalid (due to an
+uninitialized member UB — see below); fixing the UB made Levels 1/2 succeed for
+coplanar data, suppressing the planar fallback.
+
+Fix: check coplanarity **before** cylinder fits.  The gate is:
+
+```
+max perpendicular distance from best-fit plane  <  1e-6 × win_scale
+```
+
+where `win_scale` = max pairwise distance of the 5 points.  The threshold is
+1e-6 rather than the first attempt of 1e-3, which misclassified the T4 helix:
+its max_perp/win_scale ratio was 9.73e-4, just below 1e-3.  Truly coplanar
+points have ratios at machine precision (≈1e-15), so the gap between "truly
+planar" and "mildly 3D" is about 9 orders of magnitude; 1e-6 sits safely in
+the middle.
+
+Revised fallback chain:
+
+```
+Level 3 first (planar conic, if max_perp < 1e-6 × win_scale)
+  → Level 1 (exact-fit cylinder, Newton solver)
+    → Level 2 (best-fit cylinder, Coope + grid search)
+      → LagrangeWindow<3>  (no structure found)
+```
+
+---
+
+**ConicWindow: uninitialized-member UB (2026-04-10):**
+
+The non-default constructor of `ConicWindow` listed only `valid_(false)` in its
+initializer list, leaving `line_mode_` and `fit_error_` uninitialized.  UBSan
+reported "load of value 213, which is not a valid value for type 'bool'" when
+`eval_at_` read `line_mode_` during orbit validation.  The bug manifested
+differently by platform (macOS vs Linux) and by stack context (isolated binary
+vs multi-function test executable), masking it as a "platform-dependent" failure.
+
+Fix: add `line_mode_(false), fit_error_(0.0)` to the initializer list.
+
+Lesson: every geometric window constructor must initialize **all** data members in
+the initializer list, even those only written later in the constructor body — the
+early-exit path that sets `valid_(false)` never reaches those later assignments.
+
+---
+
+**FHWindow: Floater-Hormann barycentric rational fallback (2026-04-10):**
+
+Added `FHWindow<Dim, Depth>` (Floater & Hormann 2007) as a drop-in replacement
+for `LagrangeWindow<Dim>`.  Barycentric weights w̃ₖ depend only on the node times
+tₖ, not on coordinate values, so the evaluator
+
+```
+p(t) = Σₖ [w̃ₖ/(t−tₖ)]·pₖ / Σₖ [w̃ₖ/(t−tₖ)]
+```
+
+is rotationally invariant: the same scalar weights apply identically to every
+coordinate of every pₖ.  The FH theorem guarantees no real poles.  Always `valid()`.
+
+`Depth=3` (alias `FHWindow3`) gives O(h⁵) accuracy matching `LagrangeWindow`.
+`Depth=4` reduces *exactly* to `LagrangeWindow` (proved and verified in T6b).
+
+API: all three `blend_curve` overloads now accept a `Fallback` template-template
+parameter (default `LagrangeWindow`):
+
+```cpp
+blend_curve<4, FHWindow3>(ctrl, times, nd_tag{}, 120, 2);
+```
+
+Existing call sites are unchanged.  The `Fallback` type must satisfy the same
+interface as `LagrangeWindow<Dim>`: default-constructible, 5-point constructor
+matching the window signature, `valid()`, and `operator()(double)`.
+
+Why FH over a classical Padé rational: a shared-denominator [p/q] rational
+through 5 points in ℝᴺ (N≥2) is overdetermined — exact interpolation and
+rotational invariance cannot both hold simultaneously.  The barycentric form
+achieves all three properties (exact interpolation, no poles, rotational
+invariance) that classical Padé cannot provide jointly for N≥2.
+
+---
+
 ## Pending / open questions
 
 - **Replace ConicWindow with CylinderWindow for 3D?** Open.  The measured data
