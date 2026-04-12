@@ -12,7 +12,7 @@
 //       -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 \
 //       -o demo_nd_plot demo_nd_plot.cpp
 
-#include "conicblend_nd.hpp"
+#include "arcspline_nd.hpp"
 #include <cmath>
 #include <cstdio>
 #include <vector>

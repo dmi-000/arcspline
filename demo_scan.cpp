@@ -11,7 +11,7 @@
 //   {name}_ctrl.csv      — t,x,y  (N_DEMO control points)
 //   {name}_wins.csv      — i,t_mid,valid  (per ConicWindow at N_DEMO)
 
-#include "conicblend.hpp"
+#include "arcspline.hpp"
 
 #include <cmath>
 #include <cstdio>

@@ -61,4 +61,4 @@ These 4 cases fail by design — the geometry is genuinely lower-dimensional or 
 
 The key metric is `diag_clifford` (currently 26/30 — cases 1–3 and 5 above are unfixable; case 4 `dt=0.01` is the active work item).
 
-The `.bak` files (e.g. `conicblend.hpp.bak`) represent the last confirmed-good state. Do not overwrite them.
+The `.bak` files (e.g. `arcspline.hpp.bak`) represent the last confirmed-good state. Do not overwrite them.

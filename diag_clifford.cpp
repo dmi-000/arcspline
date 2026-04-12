@@ -8,7 +8,7 @@
 //       -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 \
 //       -o diag_clifford diag_clifford.cpp && ./diag_clifford
 
-#include "conicblend_nd.hpp"
+#include "arcspline_nd.hpp"
 #include <cmath>
 #include <cstdio>
 #include <vector>

@@ -139,7 +139,7 @@ def main():
 
     fig, axes = plt.subplots(2, 4, figsize=(14, 7))
     fig.suptitle(
-        "conicblend demo  —  conic (blue) vs circle (orange dashed) blend\n"
+        "arcspline demo  —  conic (blue) vs circle (orange dashed) blend\n"
         "triangles: ▲ valid window  ▲ invalid window  (green / red)",
         fontsize=10)
 

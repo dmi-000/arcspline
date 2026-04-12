@@ -1,4 +1,4 @@
-# Design History — conicblend
+# Design History — arcspline
 
 Records of significant design decisions, algorithm comparisons, and proved
 properties.  The intent is that any future contributor can understand *why*
@@ -125,7 +125,7 @@ NSolve handles the exact arithmetic internally).
 
 ---
 
-## 2026-03-22  CylinderWindow integration  (conicblend_cylinder.hpp)
+## 2026-03-22  CylinderWindow integration  (arcspline_cylinder.hpp)
 
 **Motivation: why cylinders instead of planes**
 
@@ -152,7 +152,7 @@ right primitive for 3D curves with torsion.
 **Architecture: separate opt-in `cylinder_tag{}`**
 
 Integrated the 2D-Newton cylinder solver as `CylinderWindow<3>` in
-`conicblend_cylinder.hpp`.  Available via `blend_curve(ctrl, times,
+`arcspline_cylinder.hpp`.  Available via `blend_curve(ctrl, times,
 cylinder_tag{})`.  Kept as a separate opt-in alongside `ConicWindow`:
 both coexist until evidence proves one is universally better.
 
@@ -283,7 +283,7 @@ These are independent: a cylinder can be phi-non-monotone but have a monotone co
 arc (the ellipse simply has a turning point in its x = r·φ projection).  Applying
 `phi_monotone` as a gate on `ConicWindow<2>` is too conservative.
 
-**Fix (conicblend_cylinder.hpp)**
+**Fix (arcspline_cylinder.hpp)**
 
 1. `cyl_solve` sort: removed `phi_monotone` as primary key.  New order: geodesic
    (lam_ratio < 1e-4) first, then `phi_span` ascending.
@@ -499,6 +499,75 @@ through 5 points in ℝᴺ (N≥2) is overdetermined — exact interpolation and
 rotational invariance cannot both hold simultaneously.  The barycentric form
 achieves all three properties (exact interpolation, no poles, rotational
 invariance) that classical Padé cannot provide jointly for N≥2.
+
+---
+
+## Relationship to conicspline (2026-04-12)
+
+`conicspline` (Python, `dmi-000/conicspline`) is a 2D/3D predecessor that uses
+the same 5-point conic window concept.  This section records what each library
+does that the other does not, and the rationale for not porting conicspline's
+unique features into arcspline.
+
+### What conicspline has that arcspline does not
+
+**Disagreement-based α(t) blend.**  Instead of a binary gate (window valid or
+invalid), conicspline computes a pointwise mixing factor α(t) ∈ [0,1] from the
+local disagreement between the conic arc and a cubic-spline reference, then
+evaluates `(1−α(t))·conic(t) + α(t)·spline(t)`.  Where the conic tracks the
+data well, α ≈ 0; where it diverges, the spline takes over smoothly.
+
+**Cubic/PCHIP spline as last-resort fallback.**  conicspline's deepest backstop
+is a SciPy `CubicSpline` or `PchipInterpolator`.
+
+**Kepler-time and generalized-polar windows** (dead code as of 2026-04).  These
+tiers were written but disabled (`if False:`) because the disagreement-blend
+Tier 1 handles every tested curve before reaching them.  The generalized polar
+fits `r = r₀/(1+a₁sinθ+b₁cosθ+a₂sin2θ+b₂cos2θ)` with a search over k.  Both
+would operate in 2D after the same SVD projection that arcspline already uses.
+
+All of conicspline's 3D handling is SVD-projection to 2D then lift-back; it has
+no cylinder or higher-dimensional geometric structure.
+
+### What arcspline has that conicspline does not
+
+- `CylinderWindow<3>`: exact cylindrical unrolling for 3D helices and geodesics.
+- `CliffordWindow<N>` for N ≥ 4: Clifford-torus curves in ℝᴺ.
+- `FHWindow` / pluggable `Fallback` template parameter.
+- Header-only C++17 with no external dependencies; N-dimensional throughout.
+
+### Why the α(t) blend is not worth adding to arcspline
+
+conicspline's α(t) blend is a response to having *only* 2D conics as geometric
+structure.  For a curve that is nearly-but-not-exactly a conic, there is nothing
+better to try, so graceful degradation toward a spline is the right answer.
+
+arcspline's multi-tier geometric hierarchy plays the same role structurally.
+A 5-point window on a 3D helix that a 2D conic can only approximate is correctly
+routed to `CylinderWindow<3>`; a window on a 4D Clifford curve goes to
+`CliffordWindow<4>`.  The binary-gate philosophy — accept or reject cleanly —
+is viable precisely because the acceptance criteria are calibrated against the
+*right* geometric family, not a generic polynomial.
+
+If a window fails every geometric family, the data in that window has no
+exploitable structure: a continuous blend of a wrong conic and a spline gives
+no better result than the spline alone.  `FHWindow` (or `LagrangeWindow`)
+already fills that role with O(h⁵) accuracy and no implementation overhead.
+
+Additionally, α(t) improves accuracy only by a constant factor within the same
+O(h⁵) convergence order; it does not change the order.  For the "almost conic"
+regime that motivates it, increasing the control-point density achieves the same
+improvement more predictably.
+
+### Why the cubic spline fallback is not worth adding
+
+`FHWindow<Dim,3>` achieves O(h⁵) accuracy (same as degree-4 `LagrangeWindow`)
+with a pole-free barycentric formula.  A natural cubic spline on 5 points gives
+only O(h⁴).  Adding a lower-order fallback behind a higher-order one provides
+no benefit.  The cubic spline is useful in conicspline because it applies
+*across the entire multi-segment curve* as a coherent global interpolant; as a
+per-window (5-point) fallback it is dominated by the polynomial options already
+present.
 
 ---
 

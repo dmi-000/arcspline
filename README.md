@@ -1,13 +1,13 @@
-# conicblend
+# arcspline
 
-C^N-continuous parametric curve interpolation using local conic-section windows.
+C^N-continuous parametric curve interpolation using local geometric-arc windows.
 Header-only C++17, no dependencies, works in any dimension ≥ 2.
 
 ---
 
 ## What it does
 
-Given a sequence of control points and their parameter values, `conicblend` builds a
+Given a sequence of control points and their parameter values, `arcspline` builds a
 smooth curve that passes **exactly** through every control point.  Smoothness is C^N —
 position and the first N derivatives are continuous everywhere, not just at knots.
 
@@ -30,7 +30,7 @@ smoothstep weight, giving exact C^N continuity without solving any global system
 ## Quick start
 
 ```cpp
-#include "conicblend_nd.hpp"   // all windows; includes conicblend.hpp + cylinder
+#include "arcspline_nd.hpp"   // all windows; includes arcspline.hpp + cylinder
 #include <vector>
 #include <cmath>
 
@@ -75,17 +75,17 @@ clang++ -std=c++17 -O2 -I. -o my_program my_program.cpp
 
 | Header | Window type | Points | Min n | Exact for | Invariance | Dim |
 |---|---|---|---|---|---|---|
-| `conicblend_circle.hpp` | Circle arc | 3 | 4 | Circles | Similarity | any ≥ 2 |
-| `conicblend.hpp` | Conic arc | 5 | 6 | All conics | **Affine** | any ≥ 2 |
-| `conicblend_cylinder.hpp` | Cylinder geodesic | 5 | 6 | Helices, geodesics | Euclidean | 3 only |
-| `conicblend_nd.hpp` | Clifford torus S¹×S¹ | 5 | 6 | Torus helices | Euclidean | any ≥ 4 |
+| `arcspline_circle.hpp` | Circle arc | 3 | 4 | Circles | Similarity | any ≥ 2 |
+| `arcspline.hpp` | Conic arc | 5 | 6 | All conics | **Affine** | any ≥ 2 |
+| `arcspline_cylinder.hpp` | Cylinder geodesic | 5 | 6 | Helices, geodesics | Euclidean | 3 only |
+| `arcspline_nd.hpp` | Clifford torus S¹×S¹ | 5 | 6 | Torus helices | Euclidean | any ≥ 4 |
 
-Each header includes the ones above it. `conicblend_nd.hpp` is the recommended single include.
+Each header includes the ones above it. `arcspline_nd.hpp` is the recommended single include.
 
 ### Tag dispatch
 
 ```cpp
-#include "conicblend_nd.hpp"
+#include "arcspline_nd.hpp"
 
 auto r = fc::blend_curve(ctrl, times);                     // circle (3D, no tag)
 auto r = fc::blend_curve(ctrl, times, fc::conic_tag{});    // conic (affine-invariant)
@@ -146,7 +146,7 @@ nD (Dim=2…6), Clifford torus helices, cylinder helices and twisted cubics.
 ## Documentation
 
 Full documentation — architecture, mathematical properties, invariance proofs, API
-reference, comparison with NURBS — is in [`conicblend_doc.md`](conicblend_doc.md).
+reference, comparison with NURBS — is in [`arcspline_doc.md`](arcspline_doc.md).
 
 ---
 

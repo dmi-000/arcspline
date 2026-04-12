@@ -1,9 +1,9 @@
-# conicblend — C^N 3D Curve Interpolation from Circle Arcs
+# arcspline — C^N 3D Curve Interpolation from Circle Arcs
 
 ## What it does
 
 Given a sequence of **n control points** in ℝ³ and their **parameter values** (times),
-`conicblend` constructs a smooth 3D parametric curve that passes exactly through all
+`arcspline` constructs a smooth 3D parametric curve that passes exactly through all
 of them.  Smoothness is C^N — position, velocity, acceleration, and higher derivatives
 are continuous everywhere, not just at the control points.
 
@@ -122,7 +122,7 @@ regardless of window type.  This is a local fallback (per window); by contrast,
 
 ---
 
-## Conic window construction (`conicblend.hpp`)
+## Conic window construction (`arcspline.hpp`)
 
 For a 5-point window `ctrl[i..i+4]`, the conic is constructed as follows.
 
@@ -199,7 +199,7 @@ entire `blend_curve` call falls back to circle windows.
 
 Two headers; both live in namespace `fc`, both are single-include C++17.
 
-### Circle windows (`conicblend_circle.hpp`)
+### Circle windows (`arcspline_circle.hpp`)
 
 #### Types
 
@@ -239,9 +239,9 @@ fc::BlendResultND<Dim> fc::blend_curve<Dim>(            // nD template
     int pts_per_seg = 60, int smooth_N = 2);
 ```
 
-### Conic windows (`conicblend.hpp`)
+### Conic windows (`arcspline.hpp`)
 
-Requires `conicblend_circle.hpp` (included automatically).
+Requires `arcspline_circle.hpp` (included automatically).
 
 #### Types
 
@@ -278,8 +278,8 @@ A tag argument selects the window type at compile time with zero runtime overhea
 auto r = fc::blend_curve(ctrl, times);                    // untagged 3D
 auto r = fc::blend_curve(ctrl, times, fc::circle_tag{}); // tagged
 
-// Conic windows (5-point, minimum n=6) — requires conicblend.hpp:
-#include "conicblend.hpp"
+// Conic windows (5-point, minimum n=6) — requires arcspline.hpp:
+#include "arcspline.hpp"
 auto r = fc::blend_curve(ctrl, times, fc::conic_tag{});
 
 // nD template forms:
@@ -287,14 +287,14 @@ auto r = fc::blend_curve<4>(ctrl, times, fc::circle_tag{});
 auto r = fc::blend_curve<4>(ctrl, times, fc::conic_tag{});
 ```
 
-Calling `blend_curve` with `fc::conic_tag{}` without including `conicblend.hpp`
+Calling `blend_curve` with `fc::conic_tag{}` without including `arcspline.hpp`
 gives a clear compile error — no silent fallback.
 
 ---
 
-### Cylinder windows (`conicblend_cylinder.hpp`)
+### Cylinder windows (`arcspline_cylinder.hpp`)
 
-Requires `conicblend.hpp` (included automatically).
+Requires `arcspline.hpp` (included automatically).
 
 #### Types
 
@@ -347,7 +347,7 @@ fc::BlendResult fc::blend_curve(
 #### Tag dispatch
 
 ```cpp
-#include "conicblend_cylinder.hpp"
+#include "arcspline_cylinder.hpp"
 
 // Circle windows (3-point):
 auto r = fc::blend_curve(ctrl, times);
@@ -370,15 +370,15 @@ auto r = fc::blend_curve(ctrl, times, fc::cylinder_tag{});
 
 ---
 
-### N-dimensional generalisation (`conicblend_nd.hpp`)
+### N-dimensional generalisation (`arcspline_nd.hpp`)
 
-Includes `conicblend_cylinder.hpp` (and therefore `conicblend.hpp`).  Provides
+Includes `arcspline_cylinder.hpp` (and therefore `arcspline.hpp`).  Provides
 a unified `nd_tag{}` dispatch and `CliffordWindow<N>` for N ≥ 4.
 
 #### `nd_tag` dispatch
 
 ```cpp
-#include "conicblend_nd.hpp"
+#include "arcspline_nd.hpp"
 
 auto r = fc::blend_curve<N>(ctrl, times, fc::nd_tag{}, pts_per_seg, smooth_N);
 ```
@@ -426,7 +426,7 @@ The `Fallback<N>` type must satisfy the same interface as `LagrangeWindow`:
 #### `FHWindow<Dim, Depth>` — Floater-Hormann barycentric rational
 
 ```cpp
-// In conicblend.hpp (available to all tags):
+// In arcspline.hpp (available to all tags):
 template <int Dim, int Depth = 3> struct FHWindow;
 template <int Dim> using FHWindow3 = FHWindow<Dim, 3>;
 ```
@@ -472,7 +472,7 @@ Define `FC_NO_EXCEPTIONS` before including either header to replace all
 
 ```cpp
 #define FC_NO_EXCEPTIONS
-#include "conicblend_circle.hpp"   // or conicblend.hpp
+#include "arcspline_circle.hpp"   // or arcspline.hpp
 ```
 
 #### Build
@@ -502,7 +502,7 @@ The circumcenter formula (Cramer's rule on scalar quantities A, B, C, D) is pure
 **Conic windows** use a Dim×Dim covariance eigendecomposition to find the best-fit 2D plane, then project to 2D for the conic fit.
 
 ```cpp
-#include "conicblend.hpp"
+#include "arcspline.hpp"
 
 using V4 = fc::VecN<4>;
 
@@ -531,7 +531,7 @@ The Python prototype replicates the C++ architecture exactly and adds:
 
 ```cpp
 // Circle windows (3-point, minimum n=4):
-#include "conicblend_circle.hpp"
+#include "arcspline_circle.hpp"
 #include <vector>
 #include <cmath>
 
@@ -559,7 +559,7 @@ int main()
 
 ```cpp
 // Conic windows (5-point, minimum n=6, exact on conics):
-#include "conicblend.hpp"
+#include "arcspline.hpp"
 
     auto result = fc::blend_curve(ctrl, times, fc::conic_tag{}, 80, 2);
     // Falls back to circle windows if any window fails
@@ -708,7 +708,7 @@ gives O(h²) convergence once the angular steps are small.
 - **Collinearity = signal**: a near-collinear triplet means the local curve is nearly
   straight and the circumcircle radius diverges.  This is geometrically correct and
   the library signals it cleanly (exception in C++; `LinearWindow` fallback in Python).
-- **Mirror of conicspline in 3D**: `conicblend` replaces 5-point conic windows with
+- **Mirror of conicspline in 3D**: `arcspline` replaces 5-point conic windows with
   3-point circle windows, reducing the window size by 2 (less context, simpler fit)
   while gaining native 3D support.  The smoothstep blend and C^N proof are identical.
 
@@ -716,7 +716,7 @@ gives O(h²) convergence once the angular steps are small.
 
 ## Comparison with conicspline
 
-| Property | conicspline (2D) | conicblend circle | conicblend conic | conicblend cylinder | conicblend nd |
+| Property | conicspline (2D) | arcspline circle | arcspline conic | arcspline cylinder | arcspline nd |
 |---|---|---|---|---|---|
 | Window size | 5 points | 3 points | 5 points | 5 points | 5 points |
 | Window type | Conic arc | Circle arc | Conic arc | Cylinder geodesic | Clifford torus S¹×S¹ |
@@ -736,10 +736,10 @@ gives O(h²) convergence once the angular steps are small.
 
 | File | Role |
 |---|---|
-| `conicblend_circle.hpp` | 3-pt circle windows: `VecN`/`CircleWindow`/`blend_curve`; 3D aliases; `FC_NO_EXCEPTIONS` |
-| `conicblend.hpp` | 5-pt conic windows: `ConicWindow<Dim>`, `LagrangeWindow<Dim>`, `FHWindow<Dim,Depth>`, `FHWindow3`; `blend_curve<Dim,Fallback>(..., conic_tag{})` |
-| `conicblend_cylinder.hpp` | 3D cylinder windows: `CylSol`, `cyl_solve` (2D-Newton Lichtblau), `CylinderWindow<3>`; `blend_curve<Dim,Fallback>(..., cylinder_tag{})` |
-| `conicblend_nd.hpp` | N-dim unified header: `CliffordWindow<N>` (Clifford torus → cylinder → conic 3-level fallback); `blend_curve<N,Fallback>(..., nd_tag{})` |
+| `arcspline_circle.hpp` | 3-pt circle windows: `VecN`/`CircleWindow`/`blend_curve`; 3D aliases; `FC_NO_EXCEPTIONS` |
+| `arcspline.hpp` | 5-pt conic windows: `ConicWindow<Dim>`, `LagrangeWindow<Dim>`, `FHWindow<Dim,Depth>`, `FHWindow3`; `blend_curve<Dim,Fallback>(..., conic_tag{})` |
+| `arcspline_cylinder.hpp` | 3D cylinder windows: `CylSol`, `cyl_solve` (2D-Newton Lichtblau), `CylinderWindow<3>`; `blend_curve<Dim,Fallback>(..., cylinder_tag{})` |
+| `arcspline_nd.hpp` | N-dim unified header: `CliffordWindow<N>` (Clifford torus → cylinder → conic 3-level fallback); `blend_curve<N,Fallback>(..., nd_tag{})` |
 | `test_clifford_nd.cpp` | 21-test regression suite: T1–T5 (Clifford/cylinder/conic/blend), T6 (FHWindow knot exactness + Depth=4≡Lagrange) |
 | `test_cylinder_edge.cpp` | 29-test edge-case suite: collinear/line-mode, planar fallback, circle/helix exact, tilted axis, best-fit gate |
 | `diag_clifford.cpp` | 30-case Clifford torus stress test: varied r₁,r₂,ω₁,ω₂, dt, spacing; 27/30 pass (3 unfixable aliasing cases) |

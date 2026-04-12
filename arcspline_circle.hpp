@@ -1,9 +1,9 @@
-// conicblend_circle.hpp — C^N 3D/nD curve interpolation from circle arcs
+// arcspline_circle.hpp — C^N 3D/nD curve interpolation from circle arcs
 // Header-only C++17 library.
 //
 // A circle is a special case of a conic (equal eigenvalues), so this header
 // provides the simplest window type.  For the general 5-point conic-section
-// windows see conicblend.hpp (not yet implemented).
+// windows see arcspline.hpp (not yet implemented).
 //
 // Architecture (mirrors conicspline's design):
 //   • Every 3 consecutive control points define a unique circumscribed circle
@@ -33,7 +33,7 @@
 //   using V4 = fc::VecN<4>;
 //   auto r = fc::blend_curve<4>(ctrl, times);
 //
-// Tag dispatch (forward-compatible with conicblend.hpp conic windows):
+// Tag dispatch (forward-compatible with arcspline.hpp conic windows):
 //   auto r = fc::blend_curve(ctrl, times, fc::circle_tag{});
 
 #pragma once
@@ -64,12 +64,12 @@ namespace fc {
 // ── Window-type tags for compile-time dispatch ────────────────────────────
 //
 //   fc::blend_curve(ctrl, times, fc::circle_tag{})  — this header
-//   fc::blend_curve(ctrl, times, fc::conic_tag{})   — conicblend.hpp (future)
+//   fc::blend_curve(ctrl, times, fc::conic_tag{})   — arcspline.hpp (future)
 //
-// Calling conic_tag{} without conicblend.hpp included gives a clear
+// Calling conic_tag{} without arcspline.hpp included gives a clear
 // compile error rather than silently falling back to circle windows.
 struct circle_tag {};
-struct conic_tag  {};   // reserved; defined in conicblend.hpp
+struct conic_tag  {};   // reserved; defined in arcspline.hpp
 
 // ── Constants ──────────────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-// demo_nd.cpp — tests for conicblend_circle.hpp (nD and tag-dispatch paths)
+// demo_nd.cpp — tests for arcspline_circle.hpp (nD and tag-dispatch paths)
 //
 // Compile:  clang++ -std=c++17 -O2 -I. -o demo_nd demo_nd.cpp
 //
@@ -9,7 +9,7 @@
 //   4. Collinearity guard:  circumcircle throws for Dim=2 and Dim=4
 //   5. Input validation:    size mismatch, n<4, pts_per_seg<2, bad N
 
-#include "conicblend_circle.hpp"
+#include "arcspline_circle.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -286,7 +286,7 @@ void test_input_validation()  // was Test 5, now Test 6
 
 int main()
 {
-    std::printf("=== conicblend_circle nD tests ===\n\n");
+    std::printf("=== arcspline_circle nD tests ===\n\n");
     test_circle_2d();
     test_helix_3d();
     test_4d_curve();

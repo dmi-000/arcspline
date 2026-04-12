@@ -20,7 +20,7 @@
 // Compile:
 //   g++ -std=c++17 -O2 -I. -I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 -o demo_torsion demo_torsion.cpp
 
-#include "conicblend.hpp"
+#include "arcspline.hpp"
 
 #include <cassert>
 #include <cmath>

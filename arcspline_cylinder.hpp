@@ -1,5 +1,5 @@
-// conicblend_cylinder.hpp — C^N 3D curve interpolation via cylinder unrolling
-// Header-only C++17 library.  Requires conicblend.hpp.
+// arcspline_cylinder.hpp — C^N 3D curve interpolation via cylinder unrolling
+// Header-only C++17 library.  Requires arcspline.hpp.
 //
 // Architecture:
 //   Each 5-point window tries all real cylinders through the 5 control points
@@ -28,7 +28,7 @@
 //   g++ -std=c++17 -O2 -I. -o myapp myapp.cpp
 
 #pragma once
-#include "conicblend.hpp"
+#include "arcspline.hpp"
 
 namespace fc {
 

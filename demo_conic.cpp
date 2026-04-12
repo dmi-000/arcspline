@@ -1,4 +1,4 @@
-// demo_conic.cpp — tests for conicblend.hpp (5-point conic windows)
+// demo_conic.cpp — tests for arcspline.hpp (5-point conic windows)
 //
 // Compile:  clang++ -std=c++17 -O2 -I. -o demo_conic demo_conic.cpp
 //
@@ -9,7 +9,7 @@
 //   4. Helix (3D):     similar accuracy to circle windows
 //   5. Input validation: n<6, size mismatch, pts_per_seg<2
 
-#include "conicblend.hpp"
+#include "arcspline.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -619,7 +619,7 @@ void test_cross_branch()
 
 int main()
 {
-    std::printf("=== conicblend (5-pt conic) tests ===\n\n");
+    std::printf("=== arcspline (5-pt conic) tests ===\n\n");
     test_tilted_ellipse();
     test_parabola();
     test_helix_3d();

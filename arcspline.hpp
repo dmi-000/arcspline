@@ -1,4 +1,4 @@
-// conicblend.hpp — C^N curve interpolation using 5-point conic-section windows
+// arcspline.hpp — C^N curve interpolation using 5-point conic-section windows
 // Header-only C++17 library.
 //
 // Architecture (mirrors conicspline's design):
@@ -28,13 +28,13 @@
 // Minimum control points: 6  (yields 1 blended segment, j=2).
 // Blended segments: j = 2, …, n−4.
 //
-// This file requires conicblend_circle.hpp (included automatically below).
+// This file requires arcspline_circle.hpp (included automatically below).
 //
 // Usage:
 //   auto r = fc::blend_curve<3>(ctrl, times, fc::conic_tag{});
 
 #pragma once
-#include "conicblend_circle.hpp"
+#include "arcspline_circle.hpp"
 
 #include <algorithm>
 #include <cstring>

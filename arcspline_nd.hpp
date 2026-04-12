@@ -1,5 +1,5 @@
-// conicblend_nd.hpp — C^N n-dimensional curve interpolation via Clifford torus
-// Header-only C++17 library.  Requires conicblend_cylinder.hpp.
+// arcspline_nd.hpp — C^N n-dimensional curve interpolation via Clifford torus
+// Header-only C++17 library.  Requires arcspline_cylinder.hpp.
 //
 // Generalises the conic-on-cylinder architecture to any N≥4:
 //   5 points in ℝᴺ always span at most a 4D affine subspace.
@@ -22,7 +22,7 @@
 //       -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1
 
 #pragma once
-#include "conicblend_cylinder.hpp"
+#include "arcspline_cylinder.hpp"
 
 namespace fc {
 

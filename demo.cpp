@@ -1,4 +1,4 @@
-// demo.cpp — Validate conicblend_circle.hpp against analytic test curves.
+// demo.cpp — Validate arcspline_circle.hpp against analytic test curves.
 //
 // Build:
 //   c++ -std=c++17 -O2 -o demo demo.cpp && ./demo
@@ -21,7 +21,7 @@
 //  12.  Smoothstep orders:    N=1 (C¹) and N=3 (C³) produce correct weights
 //  13.  Tag dispatch:         fc::circle_tag{} overload compiles and matches untagged result
 
-#include "conicblend_circle.hpp"
+#include "arcspline_circle.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -531,7 +531,7 @@ void test_smoothstep_orders()
 
 int main()
 {
-    std::cout << "conicblend demo — 3-point circle-arc blend curve\n";
+    std::cout << "arcspline demo — 3-point circle-arc blend curve\n";
     std::cout << std::string(50, '=') << "\n";
 
     test_helix();

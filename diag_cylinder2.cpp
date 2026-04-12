@@ -17,7 +17,7 @@
 //   g++ -std=c++17 -O2 -I. -I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 \
 //       -o diag_cylinder2 diag_cylinder2.cpp
 
-#include "conicblend.hpp"
+#include "arcspline.hpp"
 #include <cmath>
 #include <cstdio>
 #include <vector>

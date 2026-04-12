@@ -8,7 +8,7 @@
 //       -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 \
 //       -o test_cylinder_edge test_cylinder_edge.cpp
 
-#include "conicblend_cylinder.hpp"
+#include "arcspline_cylinder.hpp"
 #include <cstdio>
 #include <cmath>
 #include <vector>

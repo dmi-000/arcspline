@@ -14,7 +14,7 @@
 //   g++ -std=c++17 -O2 -I. -I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 \
 //       -o demo_cylinder demo_cylinder.cpp
 
-#include "conicblend_cylinder.hpp"
+#include "arcspline_cylinder.hpp"
 #include <cstdio>
 #include <cmath>
 #include <vector>

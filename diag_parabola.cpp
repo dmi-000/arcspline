@@ -4,7 +4,7 @@
 // Run:     ./diag_parabola
 
 #define FC_DEBUG_PARABOLA 1
-#include "conicblend.hpp"
+#include "arcspline.hpp"
 #include <cmath>
 #include <cstdio>
 #include <vector>

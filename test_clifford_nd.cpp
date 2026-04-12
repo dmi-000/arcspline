@@ -1,11 +1,11 @@
-// test_clifford_nd.cpp — 5 tests for conicblend_nd.hpp
+// test_clifford_nd.cpp — 5 tests for arcspline_nd.hpp
 //
 // Build:
 //   g++ -std=c++17 -O2 -I. \
 //       -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 \
 //       -o test_clifford_nd test_clifford_nd.cpp && ./test_clifford_nd
 
-#include "conicblend_nd.hpp"
+#include "arcspline_nd.hpp"
 
 #include <cmath>
 #include <cstdio>
