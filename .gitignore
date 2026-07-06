@@ -26,3 +26,13 @@ demo_nd20
 # Python cache
 __pycache__/
 *.pyc
+
+# --- Credentials / secrets: never commit these ---
+.ssh_credentials
+.ssh_pass
+.session_cookie
+.*_creds
+.*_pass
+.*credentials*
+*.pem
+*.key
