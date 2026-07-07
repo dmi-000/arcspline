@@ -27,12 +27,50 @@ g++ $CXXFLAGS -o demo_nd   demo_nd.cpp   && ./demo_nd
 g++ $CXXFLAGS -o demo_conic demo_conic.cpp && ./demo_conic
 ```
 
-**Regression baseline**: `diag_clifford` (target: 26–27/30), `test_clifford_nd` (21/21), `test_cylinder_edge` (29/29).
+**Regression baseline**: `diag_clifford` (27/30), `test_clifford_nd` (21/21), `test_cylinder_edge` (29/29).
 
 ## Architecture: four header layers
 
-The library is header-only C++20, all in namespace `fc`, all `template<int Dim>`:
+The library is header-only C++17, all in namespace `fc`, all `template<int Dim>`:
+
 ```
+arcspline_circle.hpp    — 3-pt circle windows (all nD)
+  └── arcspline.hpp     — 5-pt conic windows (all nD, affine-invariant)
+        └── arcspline_cylinder.hpp  — 3D cylinder windows (Lichtblau 2D-Newton)
+              └── arcspline_nd.hpp  — nD Clifford torus windows (Dim ≥ 4)
+```
+
+Each header adds one window type and a new `blend_curve` overload via tag dispatch:
+
+```cpp
+fc::blend_curve(ctrl, times);                     // circle (default 3D)
+fc::blend_curve(ctrl, times, fc::conic_tag{});    // conic (requires arcspline.hpp)
+fc::blend_curve(ctrl, times, fc::cylinder_tag{}); // cylinder 3D (requires arcspline_cylinder.hpp)
+fc::blend_curve<4>(ctrl, times, fc::nd_tag{});    // Clifford/nD (requires arcspline_nd.hpp)
+```
+
+## Core invariant: overlapping windows + smoothstep blend
+
+Every interior segment `ctrl[j] → ctrl[j+1]` is covered by **two windows**:
+
+```
+Window A (idx j-1):  ctrl[j-1], ctrl[j],   ctrl[j+1], ...
+Window B (idx j)  :  ctrl[j],   ctrl[j+1], ctrl[j+2], ...
+
+segment(t) = (1 − w(s)) · A(t)  +  w(s) · B(t)
+```
+
+At knot `ctrl[j]`, both `A` and `B` are evaluated at the **same** `t` → C^N continuity is an algebraic identity, not an approximation. No global linear system is ever solved.
+
+## Window fallback chains
+
+**CylinderWindow (3D):**  
+exact-fit cylinder (Newton) → best-fit cylinder (grid + Coope) → LagrangeWindow<3>
+
+**CliffordWindow (nD, Dim ≥ 4):**  
+Clifford torus in 4D affine hull (hull rank=4) → CylinderWindow<3> in 3D sub-hull → ConicWindow<2> in 2D sub-hull → LagrangeWindow<N>
+
+## Key algorithm: CliffordWindow solver (arcspline_nd.hpp)
 
 The solver fits 5 points in ℝᴺ to a Clifford torus `S¹(r₁) × S¹(r₂)`:
 
@@ -48,14 +86,15 @@ The solver fits 5 points in ℝᴺ to a Clifford torus `S¹(r₁) × S¹(r₂)`:
 
 ## Known diag_clifford failure cases (correct behavior)
 
-These 4 cases fail by design — the geometry is genuinely lower-dimensional or aliased:
+These 3 cases fail by design — the geometry is genuinely lower-dimensional or aliased:
 - **om2=2π−1** (hull_rank=2, circle): algebraically correct clf=NO
 - **om1=π** (hull_rank=3, sin(πk)=0 for integer k blocks identification)
 - **om1=2, om2=π** (hull_rank=3): same aliasing
-- **om1·dt≈2π** (near-repeat knot): clf=NO is correct
+
+Formerly failing: om1·dt≈2π (dt=0.01 near-repeat knot) — passes as of 2026-07-07.
 
 ## Development workflow
 
-The key metric is `diag_clifford` (currently 26/30 — cases 1–3 and 5 above are unfixable; case 4 `dt=0.01` is the active work item (passes as of 2026-07-07)).
+The key metric is `diag_clifford` (currently 27/30 — the three cases above are unfixable by design).
 
-The `.bak` files (e.g. `arcspline.hpp.bak`) represent the last confirmed-good state. Do not overwrite them.
+The `.bak` files (e.g. `conicblend.hpp.bak`) represent the last confirmed-good state. Do not overwrite them.
