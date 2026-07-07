@@ -17,7 +17,6 @@ demo_nd20
 
 # Session / scratch files
 *.txt
-!CMakeLists.txt
 *.btw
 *.compact
 *.csv

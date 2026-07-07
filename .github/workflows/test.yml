@@ -16,19 +16,19 @@ jobs:
         if: matrix.compiler == 'clang++'
         run: sudo apt-get install -y clang
 
-      - name: Build demo (3D, conicblend_circle.hpp)
+      - name: Build demo (3D, arcspline_circle.hpp)
         run: ${{ matrix.compiler }} -std=c++17 -O2 -I. -o demo demo.cpp
 
       - name: Run demo
         run: ./demo
 
-      - name: Build demo_nd (nD, conicblend_circle.hpp)
+      - name: Build demo_nd (nD, arcspline_circle.hpp)
         run: ${{ matrix.compiler }} -std=c++17 -O2 -I. -o demo_nd demo_nd.cpp
 
       - name: Run demo_nd
         run: ./demo_nd
 
-      - name: Build demo_conic (5-pt conic, conicblend.hpp)
+      - name: Build demo_conic (5-pt conic, arcspline.hpp)
         run: ${{ matrix.compiler }} -std=c++17 -O2 -I. -o demo_conic demo_conic.cpp
 
       - name: Run demo_conic

@@ -25,12 +25,9 @@ g++ $CXXFLAGS -o diag_cylinder2 diag_cylinder2.cpp && ./diag_cylinder2
 g++ $CXXFLAGS -o demo      demo.cpp      && ./demo
 g++ $CXXFLAGS -o demo_nd   demo_nd.cpp   && ./demo_nd
 g++ $CXXFLAGS -o demo_conic demo_conic.cpp && ./demo_conic
-
-# Or via CMake
-cmake -B build && cmake --build build && ctest --test-dir build
 ```
 
-**Regression baseline**: `diag_clifford` (target: 26–27/30), `test_clifford_nd` (18/18), `test_cylinder_edge` (29/29).
+**Regression baseline**: `diag_clifford` (target: 26–27/30), `test_clifford_nd` (21/21), `test_cylinder_edge` (29/29).
 
 ## Architecture: four header layers
 

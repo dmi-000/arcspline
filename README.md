@@ -132,9 +132,6 @@ $CXX -o diag_clifford diag_clifford.cpp && ./diag_clifford  # 27/30
 $CXX -o demo       demo.cpp       && ./demo
 $CXX -o demo_conic demo_conic.cpp && ./demo_conic
 $CXX -o demo_cylinder demo_cylinder.cpp && ./demo_cylinder
-
-# Or via CMake
-cmake -B build && cmake --build build && ctest --test-dir build
 ```
 
 Test coverage: exact interpolation, C^N continuity, similarity/affine invariance,
