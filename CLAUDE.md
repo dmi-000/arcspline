@@ -8,7 +8,7 @@ All test and diagnostic executables are single-file C++17 with no external depen
 
 ```bash
 # Standard compile prefix (macOS, use clang++ or g++):
-CXXFLAGS="-std=c++17 -O2 -I. -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1"
+CXXFLAGS="-std=c++17 -O2 -I."
 
 # Primary regression tests
 g++ $CXXFLAGS -o test_clifford_nd   test_clifford_nd.cpp   && ./test_clifford_nd
@@ -59,6 +59,6 @@ These 4 cases fail by design — the geometry is genuinely lower-dimensional or 
 
 ## Development workflow
 
-The key metric is `diag_clifford` (currently 26/30 — cases 1–3 and 5 above are unfixable; case 4 `dt=0.01` is the active work item).
+The key metric is `diag_clifford` (currently 26/30 — cases 1–3 and 5 above are unfixable; case 4 `dt=0.01` is the active work item (passes as of 2026-07-07)).
 
 The `.bak` files (e.g. `arcspline.hpp.bak`) represent the last confirmed-good state. Do not overwrite them.
